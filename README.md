@@ -149,26 +149,6 @@ curl -X POST "http://localhost:8000/api/broadcast_transaction" \
          }'
 ```
 
-```bash
-curl -X POST "http://localhost:8001/api/broadcast_transaction" \
-     -H "Content-Type: application/json" \
-     -d '{
-           "sender": "SYSTEM",
-           "receiver": "Bob",
-           "nft": {
-               "name": "Unique NFT2",
-               "description": "A unique digital asset",
-               "image": "http://example.com/image.png",
-               "dna": "unique-dna-222",
-               "edition": 1,
-               "date": 20241124,
-               "attributes": [{"trait_type": "color", "value": "red"}],
-               "compiler": "solidity"
-           },
-           "price": 100.0,
-           "timestamp": "2024-11-24T14:30:00"
-         }'
-```
 ### 4. 블록 채굴
 
 노드에서 블록을 채굴하고 네트워크의 다른 노드로 브로드캐스트합니다.
@@ -226,8 +206,31 @@ curl -X GET "http://localhost:8000/api/replace_chain"
             }'
    ```
 
+   브로드캐스트 확인을 위해서 다른 노드에서도 트랜잭션을 생성합니다.
+
+    ```bash
+    curl -X POST "http://localhost:8001/api/broadcast_transaction" \
+        -H "Content-Type: application/json" \
+        -d '{
+            "sender": "SYSTEM",
+            "receiver": "Bob",
+            "nft": {
+                "name": "Unique NFT2",
+                "description": "A unique digital asset",
+                "image": "http://example.com/image.png",
+                "dna": "unique-dna-222",
+                "edition": 1,
+                "date": 20241124,
+                "attributes": [{"trait_type": "color", "value": "red"}],
+                "compiler": "solidity"
+            },
+            "price": 100.0,
+            "timestamp": "2024-11-24T14:30:00"
+            }'
+    ```
+
 4. **블록 채굴 및 브로드캐스트**
-   
+   miner1이 채굴을 시작하고 성공하면 블록을 브로드캐스트합니다.
    ```bash
    curl -X POST "http://localhost:8000/api/mine_block?miner_address=miner1"
    ```
