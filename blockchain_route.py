@@ -88,7 +88,6 @@ def get_current_owner(dna: str) -> Optional[str]:
                 owner = tx["receiver"]
     return owner
 
-
 @router.post("/create_transaction", response_model=TransactionModel)
 def create_transaction(transaction: TransactionModel):
     """
@@ -124,6 +123,8 @@ def create_transaction(transaction: TransactionModel):
             timestamp=transaction.timestamp,
         )
         index = blockchain.create_transaction(tx)
+        # 트랜잭션 생성 후 블록체인 저장
+        blockchain.save_to_file()
         return transaction
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
