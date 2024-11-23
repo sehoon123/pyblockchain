@@ -165,6 +165,8 @@ def mine_block(miner_address: str):
                 response = requests.post(f'{node}/api/receive_block', json=block_model.dict())
             except requests.exceptions.RequestException:
                 continue
+        # 마이닝 후 동기화
+        blockchain.replace_chain()  # 체인 대체
         return MineBlockResponse(message="Block mined and broadcasted successfully", block=block_model)
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))

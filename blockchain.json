@@ -120,6 +120,63 @@
             ],
             "proof": 74086,
             "previous_hash": "07e566b3000c23e0bd9fd89cc37b77879689e3f55c84b79daa4d2ea64f599f77"
+        },
+        {
+            "index": 4,
+            "timestamp": "2024-11-24 03:42:36.867027",
+            "transactions": [
+                {
+                    "sender": "SYSTEM",
+                    "receiver": "Bob",
+                    "nft": {
+                        "name": "Unique NFT",
+                        "description": "A unique digital asset",
+                        "image": "http://example.com/image.png",
+                        "dna": "unique-dna-123",
+                        "edition": 1,
+                        "date": 20241124,
+                        "attributes": [
+                            {
+                                "trait_type": "color",
+                                "value": "blue"
+                            }
+                        ],
+                        "compiler": "solidity"
+                    },
+                    "price": 100.0,
+                    "timestamp": "2024-11-24T14:30:00"
+                },
+                {
+                    "sender": "SYSTEM",
+                    "receiver": "Amy",
+                    "nft": {
+                        "name": "Unique NFT222",
+                        "description": "A unique digital asset222",
+                        "image": "http://example.com/image2.png",
+                        "dna": "unique-dna-123222",
+                        "edition": 1222,
+                        "date": 20241124,
+                        "attributes": [
+                            {
+                                "trait_type": "color",
+                                "value": "blue"
+                            }
+                        ],
+                        "compiler": "solidity"
+                    },
+                    "price": 100.0,
+                    "timestamp": "2024-11-24T14:30:00"
+                },
+                {
+                    "sender": "SYSTEM",
+                    "receiver": "miner1",
+                    "nft": null,
+                    "price": 0,
+                    "timestamp": "2024-11-24 03:42:36.867002"
+                }
+            ],
+            "proof": 100783,
+            "previous_hash": "d2cf5321b444ad1f13a3ad2dffb3ba688cb55a7a1e0754084f8d31c82887d7e4"
         }
     ],
     "pending_transactions": []
