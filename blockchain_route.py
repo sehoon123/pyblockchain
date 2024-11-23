@@ -308,3 +308,52 @@ def get_all_transactions():
             )
             transactions.append(transaction)
     return transactions
+
+
+# 새로운 블록 검색 엔드포인트 추가
+@router.get("/block", response_model=BlockModel)
+def get_block(
+    index: Optional[int] = Query(None, description="Index of the block to retrieve"),
+    hash: Optional[str] = Query(None, description="Hash of the block to retrieve")
+):
+    """
+    Retrieve a specific block by its index or hash.
+    """
+    if index is None and hash is None:
+        raise HTTPException(status_code=400, detail="Either 'index' or 'hash' must be provided.")
+
+    block = None
+
+    if index is not None:
+        block = blockchain.get_block_by_index(index)
+        if not block:
+            raise HTTPException(status_code=404, detail=f"Block with index {index} not found.")
+    elif hash is not None:
+        block = blockchain.get_block_by_hash(hash)
+        if not block:
+            raise HTTPException(status_code=404, detail=f"Block with hash {hash} not found.")
+
+    # Convert block dict to BlockModel
+    transactions = []
+    for tx in block["transactions"]:
+        if tx["nft"]:
+            nft = NFTModel(**tx["nft"])
+        else:
+            nft = None
+        transaction = TransactionModel(
+            sender=tx["sender"],
+            receiver=tx["receiver"],
+            nft=nft,
+            price=tx["price"],
+            timestamp=tx["timestamp"],
+        )
+        transactions.append(transaction)
+
+    block_model = BlockModel(
+        index=block["index"],
+        timestamp=block["timestamp"],
+        transactions=transactions,
+        proof=block["proof"],
+        previous_hash=block["previous_hash"],
+    )
+    return block_model

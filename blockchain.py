@@ -178,3 +178,18 @@ class Blockchain:
             block_index += 1
 
         return True
+
+    # 새로운 메서드 추가: 인덱스로 블록 검색
+    def get_block_by_index(self, index: int) -> Optional[dict]:
+        for block in self.chain:
+            if block['index'] == index:
+                return block
+        return None
+
+    # 새로운 메서드 추가: 해시로 블록 검색
+    def get_block_by_hash(self, hash_value: str) -> Optional[dict]:
+        for block in self.chain:
+            block_hash = self._hash(block)
+            if block_hash == hash_value:
+                return block
+        return None

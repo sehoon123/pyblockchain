@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from blockchain_route import router as blockchain_router
 
 
-app = fastapi.FastAPI(title="NFT Blockchain API", version="0.2.0")
+app = fastapi.FastAPI(title="NFT Blockchain API", version="0.2.1")
 
 # Add CORS middleware
 app.add_middleware(
