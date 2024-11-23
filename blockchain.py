@@ -2,7 +2,8 @@
 import datetime as _dt
 import hashlib as _hashlib
 import json as _json
-from typing import List, Optional
+from typing import List, Optional, Set
+import requests
 
 class NFT:
     def __init__(
@@ -98,6 +99,7 @@ class Blockchain:
         self.chain: List[dict] = []
         self.pending_transactions: List[Transaction] = []
         self.chain_file = 'blockchain.json'
+        self.nodes: Set[str] = set()  # 노드 목록을 저장하는 세트
 
         # 블록체인 로드 시도
         if not self.load_from_file():
@@ -111,6 +113,60 @@ class Blockchain:
             self.chain.append(genesis_block)
             # 새로운 블록체인 저장
             self.save_to_file()
+    
+
+    # 블록 추가 메서드 추가
+    def add_block(self, block_data: dict) -> bool:
+        """
+        수신한 블록을 체인에 추가합니다.
+        """
+        previous_block = self.get_previous_block()
+        if previous_block['index'] + 1 != block_data['index']:
+            return False
+        if previous_block['hash'] != block_data['previous_hash']:
+            return False
+        if not self.is_chain_valid(self.chain + [block_data]):
+            return False
+        self.chain.append(block_data)
+        self.save_to_file()
+        return True
+
+    # 노드 등록 메서드 추가
+    def register_node(self, address: str):
+        """
+        새로운 노드를 등록합니다.
+        address: 예) 'http://192.168.0.5:5000'
+        """
+        self.nodes.add(address)
+
+    # 체인 대체 메서드 추가
+    def replace_chain(self) -> bool:
+        """
+        네트워크의 다른 노드들과 체인을 비교하여,
+        자신의 체인을 가장 긴 유효한 체인으로 대체합니다.
+        """
+        network = self.nodes
+        longest_chain = None
+        max_length = len(self.chain)
+
+        for node in network:
+            try:
+                response = requests.get(f'{node}/api/blockchain')
+                if response.status_code == 200:
+                    length = response.json()['length']
+                    chain = response.json()['chain']
+                    if length > max_length and self.is_chain_valid(chain):
+                        max_length = length
+                        longest_chain = chain
+            except requests.exceptions.RequestException:
+                continue  # 노드에 연결할 수 없으면 다음 노드로
+
+        if longest_chain:
+            self.chain = longest_chain
+            self.save_to_file()
+            return True
+
+        return False
 
     def create_transaction(self, transaction: Transaction) -> int:
         self.pending_transactions.append(transaction)
@@ -184,12 +240,14 @@ class Blockchain:
         }
         return block
 
-    def is_chain_valid(self) -> bool:
-        current_block = self.chain[0]
+    def is_chain_valid(self, chain: Optional[List[dict]] = None) -> bool:
+        if chain is None:
+            chain = self.chain
+        current_block = chain[0]
         block_index = 1
 
-        while block_index < len(self.chain):
-            next_block = self.chain[block_index]
+        while block_index < len(chain):
+            next_block = chain[block_index]
 
             # 이전 해시 확인
             if next_block["previous_hash"] != self._hash(current_block):
@@ -211,6 +269,7 @@ class Blockchain:
             block_index += 1
 
         return True
+
 
     def get_block_by_index(self, index: int) -> Optional[dict]:
         for block in self.chain:

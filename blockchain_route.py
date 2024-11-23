@@ -1,8 +1,10 @@
+#blockchain_route.py
 import os
+import requests
 from typing import List, Optional
 import boto3
 from botocore.exceptions import NoCredentialsError
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from dotenv import load_dotenv
 from blockchain import Blockchain, Transaction, NFT
 from models import (
@@ -157,11 +159,18 @@ def mine_block(miner_address: str):
             proof=block["proof"],
             previous_hash=block["previous_hash"],
         )
-        return MineBlockResponse(message="Block mined successfully", block=block_model)
+        # 다른 노드들에게 새로운 블록 브로드캐스트
+        for node in blockchain.nodes:
+            try:
+                response = requests.post(f'{node}/api/receive_block', json=block_model.dict())
+            except requests.exceptions.RequestException:
+                continue
+        return MineBlockResponse(message="Block mined and broadcasted successfully", block=block_model)
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 
 @router.get("/blockchain", response_model=BlockchainModel)
@@ -358,3 +367,84 @@ def get_block(
         previous_hash=block["previous_hash"],
     )
     return block_model
+
+
+# 노드 등록 엔드포인트 추가
+@router.post("/register_node")
+def register_node(node_address: str):
+    """
+    새로운 노드를 네트워크에 등록합니다.
+    """
+    if not node_address:
+        raise HTTPException(status_code=400, detail="Invalid node address")
+
+    blockchain.register_node(node_address)
+    response = {
+        'message': 'New node has been added',
+        'total_nodes': list(blockchain.nodes),
+    }
+    return response
+
+# 체인 대체 엔드포인트 추가
+@router.get("/replace_chain")
+def replace_chain():
+    """
+    네트워크의 다른 노드들과 비교하여 체인을 대체합니다.
+    """
+    is_replaced = blockchain.replace_chain()
+    if is_replaced:
+        response = {
+            'message': 'The chain was replaced by the longest one.',
+            'new_chain': blockchain.chain,
+        }
+    else:
+        response = {
+            'message': 'Current chain is already the longest.',
+            'chain': blockchain.chain,
+        }
+    return response
+
+# 트랜잭션 브로드캐스트 엔드포인트 추가
+@router.post("/broadcast_transaction")
+def broadcast_transaction(transaction: TransactionModel):
+    """
+    트랜잭션을 다른 노드들에게 브로드캐스트합니다.
+    """
+    # 현재 노드에서 트랜잭션 생성
+    create_transaction(transaction)
+    # 다른 노드들에게 트랜잭션 전송
+    for node in blockchain.nodes:
+        try:
+            response = requests.post(f'{node}/api/create_transaction', json=transaction.dict())
+        except requests.exceptions.RequestException:
+            continue  # 노드에 연결할 수 없으면 다음 노드로
+    return {'message': 'Transaction broadcasted successfully.'}
+
+# 블록 브로드캐스트 엔드포인트 추가
+@router.post("/broadcast_block")
+def broadcast_block(block: BlockModel):
+    """
+    새로운 블록을 다른 노드들에게 브로드캐스트합니다.
+    """
+    # 블록을 체인에 추가하기 전에 유효성 검사
+    added = blockchain.add_block(block.dict())
+    if not added:
+        raise HTTPException(status_code=400, detail="Invalid block")
+    # 다른 노드들에게 블록 전송
+    for node in blockchain.nodes:
+        try:
+            response = requests.post(f'{node}/api/receive_block', json=block.dict())
+        except requests.exceptions.RequestException:
+            continue
+    return {'message': 'Block broadcasted successfully.'}
+
+# 블록 수신 엔드포인트 추가
+@router.post("/receive_block")
+def receive_block(block: BlockModel):
+    """
+    다른 노드로부터 블록을 수신하여 체인에 추가합니다.
+    """
+    added = blockchain.add_block(block.dict())
+    if not added:
+        raise HTTPException(status_code=400, detail="Invalid block")
+    return {'message': 'Block added successfully.'}
