@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CORS Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: auto;
+      padding: 20px;
+    }
+    input[type="file"] {
+      display: block;
+      margin: 20px 0;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      border: none;
+      border-radius: 5px;
+      background-color: #4CAF50;
+      color: white;
+      cursor: pointer;
+    }
+    button:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+    .result {
+      margin-top: 20px;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      background: #f9f9f9;
+    }
+    .error {
+      color: red;
+    }
+    img {
+      max-width: 100%;
+      height: auto;
+      margin-top: 20px;
+    }
+    .loading {
+      font-style: italic;
+      color: gray;
+    }
+  </style>
+</head>
+<body>
+  <h2>CORS Test</h2>
+  <p>Test uploading an image using a pre-signed URL.</p>
+
+  <label for="imageFile">Select an image:</label>
+  <input type="file" id="imageFile" accept="image/*">
+
+  <button id="uploadButton" disabled>Upload</button>
+
+  <div class="result" id="result"></div>
+
+  <h3>Test Image from URL</h3>
+  <p>Below is the image loaded from the provided URL. If there is a CORS issue, it will not display properly or show an error in the console.</p>
+  <img id="corsImage" alt="Image from CORS test URL">
+  <div id="corsImageResult"></div>
+
+  <script>
+    const uploadButton = document.getElementById('uploadButton');
+    const resultDiv = document.getElementById('result');
+    const corsImage = document.getElementById('corsImage');
+    const corsImageResult = document.getElementById('corsImageResult');
+
+    let selectedFile;
+
+    // Handle file selection
+    document.getElementById('imageFile').addEventListener('change', (event) => {
+      selectedFile = event.target.files[0];
+      uploadButton.disabled = !selectedFile;
+      resultDiv.innerHTML = ''; // Clear previous result
+    });
+
+    // Function to get the MIME type of the file
+    function getMimeType(file) {
+      return file.type || "application/octet-stream"; // Fallback if no MIME type is provided
+    }
+
+    // Upload file using pre-signed URL
+    async function uploadFile(file) {
+      try {
+        const contentType = getMimeType(file);
+        resultDiv.innerHTML = '<p class="loading">Generating pre-signed URL...</p>';
+
+        // Step 1: Request pre-signed URL with content type
+        const response = await fetch(`http://localhost:8000/generate_presigned_url?file_name=${encodeURIComponent(file.name)}&content_type=${encodeURIComponent(contentType)}`);
+        if (!response.ok) {
+          throw new Error('Failed to generate pre-signed URL');
+        }
+
+        const data = await response.json();
+        const presignedUrl = data.url;
+
+        resultDiv.innerHTML = '<p class="loading">Uploading file...</p>';
+
+        // Step 2: Upload file to S3
+        const uploadResponse = await fetch(presignedUrl, {
+          method: 'PUT',
+          body: file,
+          headers: {
+            "Content-Type": contentType, // Add Content-Type header dynamically
+          },
+        });
+
+        if (uploadResponse.ok) {
+          resultDiv.innerHTML = `<p>File uploaded successfully! <a href="${presignedUrl.split('?')[0]}" target="_blank">View file</a></p>`;
+        } else {
+          throw new Error(`Upload failed: ${uploadResponse.statusText}`);
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        resultDiv.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+      }
+    }
+
+    // Attach click event to upload button
+    uploadButton.addEventListener('click', () => {
+      if (selectedFile) {
+        uploadFile(selectedFile);
+      }
+    });
+
+    // Load and test CORS image
+    function testCorsImage() {
+      const testUrl = 'https://sesac-nft-image.s3.ap-northeast-1.amazonaws.com/nft_images/tecors';
+      corsImage.src = testUrl;
+      corsImage.onload = () => {
+        corsImageResult.innerHTML = '<p>Image loaded successfully.</p>';
+      };
+      corsImage.onerror = () => {
+        corsImageResult.innerHTML = '<p class="error">Failed to load image. This might be due to a CORS issue.</p>';
+        console.error('CORS error: Unable to load the image.');
+      };
+    }
+
+    // Test the image immediately
+    testCorsImage();
+  </script>
+</body>
+</html>

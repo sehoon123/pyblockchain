@@ -1,4 +1,4 @@
-# main.py
+import boto3
 import fastapi as _fastapi
 from fastapi import HTTPException
 from typing import List, Optional
@@ -11,10 +11,77 @@ from models import (
     MineBlockResponse,
 )
 from blockchain import Blockchain, Transaction, NFT
+from botocore.exceptions import NoCredentialsError
+from fastapi.middleware.cors import CORSMiddleware
+from botocore.client import Config
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 # Initialize the blockchain
 blockchain = Blockchain()
-app = _fastapi.FastAPI(title="NFT Blockchain API", version="1.0.0")
+app = _fastapi.FastAPI(title="NFT Blockchain API", version="0.1.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+)
+
+AWS_REGION = os.getenv("AWS_REGION")
+AWS_ACCESS_KEY_ID=os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY=os.getenv("AWS_SECRET_ACCESS_KEY")
+S3_BUCKET_NAME=os.getenv("S3_BUCKET_NAME")
+
+s3_client = boto3.client(
+    "s3",
+    region_name=AWS_REGION,
+    aws_access_key_id=AWS_ACCESS_KEY_ID,
+    aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+)
+
+ENDPOINTURL = s3_client.meta.endpoint_url
+
+s3_client = boto3.client(
+    's3', 
+    endpoint_url=ENDPOINTURL,
+    region_name=AWS_REGION,
+    aws_access_key_id=AWS_ACCESS_KEY_ID,
+    aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+)
+
+@app.get("/generate_presigned_url")
+def generate_presigned_url(
+    file_name: str = _fastapi.Query(..., description="업로드할 파일 이름"),
+    content_type: str = _fastapi.Query("application/octet-stream", description="파일의 Content-Type (기본값: application/octet-stream)")
+):
+    """
+    Generate a pre-signed URL for S3 file upload.
+    """
+    try:
+        file_key = f"nft_images/{file_name}"  # S3 내 파일 경로
+        presigned_url = s3_client.generate_presigned_url(
+            ClientMethod="put_object",
+            Params={
+                "Bucket": S3_BUCKET_NAME,
+                "Key": file_key,
+                "ContentType": content_type,  # Content-Type 설정
+            },
+            ExpiresIn=3600,  # URL 유효 기간 (초 단위, 3600초 = 1시간)
+            HttpMethod="PUT",
+        )
+
+        return {
+            "url": presigned_url,
+            "file_key": file_key,
+        }
+    except NoCredentialsError:
+        raise HTTPException(status_code=500, detail="AWS credentials not available")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 def get_current_owner(dna: str) -> Optional[str]:
     """
@@ -183,16 +250,18 @@ def get_previous_block():
 @app.get("/nfts", response_model=List[NFTModel])
 def get_all_nfts():
     """
-    Retrieve all NFTs in the blockchain.
+    Retrieve all unique NFTs in the blockchain.
     """
-    nfts = []
+    unique_nfts = {}
     for block in blockchain.chain:
         for tx in block["transactions"]:
             nft_data = tx.get("nft")
             if nft_data:
-                nft = NFTModel(**nft_data)
-                nfts.append(nft)
-    return nfts
+                # Use a unique identifier like 'dna' to filter duplicates
+                nft_key = nft_data.get("dna")
+                if nft_key and nft_key not in unique_nfts:
+                    unique_nfts[nft_key] = NFTModel(**nft_data)
+    return list(unique_nfts.values())
 
 
 @app.get("/nft/{dna}", response_model=NFTDetailModel)
@@ -200,20 +269,28 @@ def get_nft_by_dna(dna: str):
     """
     Retrieve a specific NFT by its DNA along with the current owner.
     """
+    print(f"Searching for DNA: {dna}")
     nft_found = None
     owner = None
+    last_block_index = None
 
     # Iterate over the blockchain in chronological order
     for block in blockchain.chain:
+        print(f"Inspecting block: {block['index']}")
         for tx in block["transactions"]:
             nft_data = tx.get("nft")
+            if nft_data:
+                print(f"Found NFT with DNA: {nft_data.get('dna')}")
             if nft_data and nft_data.get("dna") == dna:
                 nft_found = NFTModel(**nft_data)
                 owner = tx["receiver"]  # The receiver is the current owner
+                last_block_index = block["index"]
 
     if nft_found and owner:
-        return NFTDetailModel(nft=nft_found, owner=owner)
+        print(f"NFT found: {nft_found}")
+        return NFTDetailModel(nft=nft_found, owner=owner, last_block_index=last_block_index)
 
+    print("NFT not found")
     raise HTTPException(status_code=404, detail="NFT not found")
 
 

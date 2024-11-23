@@ -49,3 +49,4 @@ class MineBlockResponse(BaseModel):
 class NFTDetailModel(BaseModel):
     nft: NFTModel
     owner: str
+    last_block_index: int
