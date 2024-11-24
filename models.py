@@ -46,6 +46,10 @@ class MineBlockResponse(BaseModel):
     block: BlockModel
 
 
+class MineBlockRequestModel(BaseModel):
+    miner_address: str
+
+
 class NFTDetailModel(BaseModel):
     nft: NFTModel
     owner: str

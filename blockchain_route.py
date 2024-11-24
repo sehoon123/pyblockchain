@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from dotenv import load_dotenv
 from blockchain import Blockchain, Transaction, NFT
 from models import (
+    MineBlockRequestModel,
     NFTModel,
     NFTDetailModel,
     NodeRegisterModel,
@@ -134,14 +135,15 @@ def create_transaction(transaction: TransactionModel):
 
 
 @router.post("/mine_block", response_model=MineBlockResponse)
-def mine_block(miner_address: str):
+def mine_block(request: MineBlockRequestModel):
     """
     Mine a new block by adding all pending transactions to the blockchain.
     """
+    miner_address = request.miner_address
+
     if not blockchain.is_chain_valid():
         raise HTTPException(status_code=400, detail="Invalid blockchain")
 
-    print(blockchain.nodes)
     try:
         block = blockchain.mine_block(miner_address)
         # Convert block dict to BlockModel
@@ -451,7 +453,13 @@ def receive_block(block: BlockModel):
     """
     다른 노드로부터 블록을 수신하여 체인에 추가합니다.
     """
-    added = blockchain.add_block(block.dict())
-    if not added:
-        raise HTTPException(status_code=400, detail="Invalid block")
-    return {'message': 'Block added successfully.'}
+    try:
+        block_data = block.dict()
+        added = blockchain.add_block(block_data)
+        if not added:
+            raise HTTPException(status_code=400, detail="Invalid block")
+        return {'message': 'Block added successfully.'}
+    except KeyError as ke:
+        raise HTTPException(status_code=400, detail=f"Missing key in block data: {ke}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

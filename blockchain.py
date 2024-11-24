@@ -122,14 +122,24 @@ class Blockchain:
         """
         previous_block = self.get_previous_block()
         if previous_block['index'] + 1 != block_data['index']:
+            print(f"Invalid index: expected {previous_block['index'] + 1}, got {block_data['index']}")
             return False
-        if previous_block['hash'] != block_data['previous_hash']:
+        
+        # 이전 블록의 해시를 계산하여 비교
+        previous_block_hash = self._hash(previous_block)
+        if previous_block_hash != block_data['previous_hash']:
+            print(f"Invalid previous hash: expected {previous_block_hash}, got {block_data['previous_hash']}")
             return False
+        
         if not self.is_chain_valid(self.chain + [block_data]):
+            print("Chain validation failed after adding the new block.")
             return False
+        
         self.chain.append(block_data)
         self.save_to_file()
+        print(f"Block {block_data['index']} added successfully.")
         return True
+
 
     # 노드 등록 메서드 추가
     def register_node(self, address: str):
