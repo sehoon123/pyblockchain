@@ -163,7 +163,7 @@ curl -X 'POST' \
 
 ```bash
 curl -X 'POST' \
-  'http://localhost:8001/api/create_transaction' \
+  'http://localhost:8001/api/broadcast_transaction' \
   -H 'accept: application/json' \
   -H 'Content-Type: application/json' \
   -d '{
@@ -249,7 +249,7 @@ curl -X GET "http://localhost:8000/api/replace_chain"
    
    ```bash
    curl -X 'POST' \
-   'http://localhost:8001/api/create_transaction' \
+   'http://localhost:8001/api/broadcast_transaction' \
    -H 'accept: application/json' \
    -H 'Content-Type: application/json' \
    -d '{

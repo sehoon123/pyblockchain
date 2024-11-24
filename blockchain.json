@@ -258,7 +258,65 @@
             ],
             "proof": 12198,
             "previous_hash": "b0f239602642dd14eb8153b8f55faefa7365dc1f6c82f2f72659892b7fec3b4b"
+        },
+        {
+            "index": 9,
+            "timestamp": "2024-11-24 17:35:40.235563",
+            "transactions": [
+                {
+                    "sender": "SYSTEM",
+                    "receiver": "string",
+                    "nft": {
+                        "name": "string",
+                        "description": "string",
+                        "image": "string",
+                        "dna": "string",
+                        "edition": 0,
+                        "date": 0,
+                        "attributes": [
+                            {
+                                "trait_type": "string",
+                                "value": "string"
+                            }
+                        ],
+                        "compiler": "string"
+                    },
+                    "price": 0.0,
+                    "timestamp": "string"
+                },
+                {
+                    "sender": "SYSTEM",
+                    "receiver": "localhost:8001",
+                    "nft": null,
+                    "price": 0.0,
+                    "timestamp": "2024-11-24 17:35:40.235545"
+                }
+            ],
+            "proof": 43104,
+            "previous_hash": "da746766a72a515aae78baf6091ab83f3e7e9f2385a56cdcc1810b0779ee04c2"
         }
     ],
-    "pending_transactions": []
+    "pending_transactions": [
+        {
+            "sender": "SYSTEM",
+            "receiver": "string",
+            "nft": {
+                "name": "string",
+                "description": "string",
+                "image": "string",
+                "dna": "string",
+                "edition": 0,
+                "date": 0,
+                "attributes": [
+                    {
+                        "trait_type": "string",
+                        "value": "string"
+                    }
+                ],
+                "compiler": "string"
+            },
+            "price": 0.0,
+            "timestamp": "string"
+        }
+    ]
 }

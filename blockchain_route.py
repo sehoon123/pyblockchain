@@ -419,15 +419,30 @@ def broadcast_transaction(transaction: TransactionModel):
     """
     트랜잭션을 다른 노드들에게 브로드캐스트합니다.
     """
-    # 현재 노드에서 트랜잭션 생성
-    create_transaction(transaction)
-    # 다른 노드들에게 트랜잭션 전송
+    # 현재 노드에서 트랜잭션 검증 및 생성
+    try:
+        create_transaction(transaction)  # 내부적으로 유효성 검증이 이루어짐
+    except HTTPException as e:
+        return {'message': f"Transaction validation failed: {e.detail}"}
+
+    # 트랜잭션 브로드캐스트
+    broadcast_errors = []
     for node in blockchain.nodes:
         try:
             response = requests.post(f'{node}/api/create_transaction', json=transaction.dict())
-        except requests.exceptions.RequestException:
-            continue  # 노드에 연결할 수 없으면 다음 노드로
+            if response.status_code != 200:
+                broadcast_errors.append(f"Failed to broadcast to {node}: {response.text}")
+        except requests.exceptions.RequestException as e:
+            broadcast_errors.append(f"Failed to broadcast to {node}: {e}")
+
+    if broadcast_errors:
+        return {
+            'message': 'Transaction broadcasted with some errors.',
+            'errors': broadcast_errors,
+        }
+
     return {'message': 'Transaction broadcasted successfully.'}
+
 
 # 블록 브로드캐스트 엔드포인트 추가
 @router.post("/broadcast_block")
