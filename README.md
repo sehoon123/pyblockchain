@@ -136,10 +136,23 @@ uvicorn main:app --reload --port 8001
 
 ```bash
 # 노드 A (http://localhost:8000) 에서 노드 B 등록
-curl -X POST "http://localhost:8000/api/register_node?node_address=http://localhost:8001"
+curl -X 'POST' \
+  'http://localhost:8000/api/register_node' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "node_address": "http://localhost:8001"
+}'
 
 # 노드 B (http://localhost:8001) 에서 노드 A 등록
-curl -X POST "http://localhost:8001/api/register_node?node_address=http://localhost:8000"
+curl -X 'POST' \
+  'http://localhost:8001/api/register_node' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "node_address": "http://localhost:8000"
+}'
+```
 
 
 ### 3. 트랜잭션 생성
@@ -149,24 +162,31 @@ curl -X POST "http://localhost:8001/api/register_node?node_address=http://localh
 이후 NFT를 소유한 주인은 sender 필드에 자신의 이름을 사용합니다.
 
 ```bash
-curl -X POST "http://localhost:8000/api/broadcast_transaction" \
-     -H "Content-Type: application/json" \
-     -d '{
-           "sender": "SYSTEM",
-           "receiver": "Amy",
-           "nft": {
-               "name": "Unique NFT1",
-               "description": "A unique digital asset",
-               "image": "http://example.com/image.png",
-               "dna": "unique-dna-111",
-               "edition": 1,
-               "date": 20241124,
-               "attributes": [{"trait_type": "color", "value": "blue"}],
-               "compiler": "solidity"
-           },
-           "price": 100.0,
-           "timestamp": "2024-11-24T14:30:00"
-         }'
+curl -X 'POST' \
+  'http://localhost:8001/api/create_transaction' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "sender": "SYSTEM",
+  "receiver": "KKKK111K",
+  "nft": {
+    "name": "KKK111KK",
+    "description": "string",
+    "image": "string",
+    "dna": "KKKK111KKKK",
+    "edition": 0,
+    "date": 0,
+    "attributes": [
+      {
+        "trait_type": "string",
+        "value": "string"
+      }
+    ],
+    "compiler": "string"
+  },
+  "price": 0,
+  "timestamp": "string"
+}'
 ```
 
 ### 4. 블록 채굴
@@ -174,7 +194,13 @@ curl -X POST "http://localhost:8000/api/broadcast_transaction" \
 노드에서 블록을 채굴하고 네트워크의 다른 노드로 브로드캐스트합니다.
 
 ```bash
-curl -X POST "http://localhost:8000/api/mine_block?miner_address=miner1"
+curl -X 'POST' \
+  'http://localhost:8001/api/mine_block' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "miner_address": "localhost:8001"
+}'
 ```
 
 ### 5. 체인 동기화
@@ -200,59 +226,64 @@ curl -X GET "http://localhost:8000/api/replace_chain"
 2. **노드 간 등록**
    
    ```bash
-   curl -X POST "http://localhost:8000/api/register_node?node_address=http://localhost:8001"
+   # 노드 A (http://localhost:8000) 에서 노드 B 등록
+   curl -X 'POST' \
+   'http://localhost:8000/api/register_node' \
+   -H 'accept: application/json' \
+   -H 'Content-Type: application/json' \
+   -d '{
+   "node_address": "http://localhost:8001"
+   }'
+
+   # 노드 B (http://localhost:8001) 에서 노드 A 등록
+   curl -X 'POST' \
+   'http://localhost:8001/api/register_node' \
+   -H 'accept: application/json' \
+   -H 'Content-Type: application/json' \
+   -d '{
+   "node_address": "http://localhost:8000"
+   }'
    ```
 
 3. **트랜잭션 생성 및 브로드캐스트**
    
    ```bash
-   curl -X POST "http://localhost:8000/api/broadcast_transaction" \
-        -H "Content-Type: application/json" \
-        -d '{
-              "sender": "SYSTEM",
-              "receiver": "Bob",
-              "nft": {
-                  "name": "Unique NFT",
-                  "description": "A unique digital asset",
-                  "image": "http://example.com/image.png",
-                  "dna": "unique-dna-123",
-                  "edition": 1,
-                  "date": 20241124,
-                  "attributes": [{"trait_type": "color", "value": "blue"}],
-                  "compiler": "solidity"
-              },
-              "price": 100.0,
-              "timestamp": "2024-11-24T14:30:00"
-            }'
-   ```
-
-   브로드캐스트 확인을 위해서 다른 노드에서도 트랜잭션을 생성합니다.
-
-    ```bash
-    curl -X POST "http://localhost:8001/api/broadcast_transaction" \
-        -H "Content-Type: application/json" \
-        -d '{
-            "sender": "SYSTEM",
-            "receiver": "Bob",
-            "nft": {
-                "name": "Unique NFT2",
-                "description": "A unique digital asset",
-                "image": "http://example.com/image.png",
-                "dna": "unique-dna-222",
-                "edition": 1,
-                "date": 20241124,
-                "attributes": [{"trait_type": "color", "value": "red"}],
-                "compiler": "solidity"
-            },
-            "price": 100.0,
-            "timestamp": "2024-11-24T14:30:00"
-            }'
+   curl -X 'POST' \
+   'http://localhost:8001/api/create_transaction' \
+   -H 'accept: application/json' \
+   -H 'Content-Type: application/json' \
+   -d '{
+   "sender": "SYSTEM",
+   "receiver": "KKKK111K",
+   "nft": {
+      "name": "KKK111KK",
+      "description": "string",
+      "image": "string",
+      "dna": "KKKK111KKKK",
+      "edition": 0,
+      "date": 0,
+      "attributes": [
+         {
+         "trait_type": "string",
+         "value": "string"
+         }
+      ],
+      "compiler": "string"
+   },
+   "price": 0,
+   "timestamp": "string"
+   }'
     ```
 
 4. **블록 채굴 및 브로드캐스트**
    miner1이 채굴을 시작하고 성공하면 블록을 브로드캐스트합니다.
    ```bash
-   curl -X POST "http://localhost:8000/api/mine_block?miner_address=miner1"
+   curl -X 'POST' \ 'http://localhost:8001/api/mine_block' \
+   -H 'accept: application/json' \
+   -H 'Content-Type: application/json' \
+   -d '{
+   "miner_address": "localhost:8001"
+   }'
    ```
 
 5. **체인 동기화 자동화**
