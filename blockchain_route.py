@@ -10,6 +10,7 @@ from blockchain import Blockchain, Transaction, NFT
 from models import (
     NFTModel,
     NFTDetailModel,
+    NodeRegisterModel,
     TransactionModel,
     BlockModel,
     BlockchainModel,
@@ -140,6 +141,7 @@ def mine_block(miner_address: str):
     if not blockchain.is_chain_valid():
         raise HTTPException(status_code=400, detail="Invalid blockchain")
 
+    print(blockchain.nodes)
     try:
         block = blockchain.mine_block(miner_address)
         # Convert block dict to BlockModel
@@ -161,6 +163,7 @@ def mine_block(miner_address: str):
         )
         # 다른 노드들에게 새로운 블록 브로드캐스트
         for node in blockchain.nodes:
+            print(node)
             try:
                 response = requests.post(f'{node}/api/receive_block', json=block_model.dict())
             except requests.exceptions.RequestException:
@@ -373,10 +376,12 @@ def get_block(
 
 # 노드 등록 엔드포인트 추가
 @router.post("/register_node")
-def register_node(node_address: str):
+def register_node(node: NodeRegisterModel):
     """
     새로운 노드를 네트워크에 등록합니다.
     """
+    node_address = node.node_address
+
     if not node_address:
         raise HTTPException(status_code=400, detail="Invalid node address")
 

@@ -50,3 +50,7 @@ class NFTDetailModel(BaseModel):
     nft: NFTModel
     owner: str
     last_block_index: int
+
+
+class NodeRegisterModel(BaseModel):
+    node_address: str
