@@ -48,7 +48,17 @@
    pip install -r requirements.txt
    ```
 
-4. 서버 실행:
+4. 환경 변수 파일 생성:
+   
+   ```bash
+   echo 'AWS_REGION="your-region"' >> .env
+   echo 'AWS_ACCESS_KEY_ID="your-access-key"' >> .env
+   echo 'AWS_SECRET_ACCESS_KEY="your-secret-key"' >> .env
+   echo 'S3_BUCKET_NAME="your-s3-bucket-name"' >> .env
+
+   ```
+
+5. 서버 실행:
 
    ```bash
    uvicorn main:app --reload --port 8000
