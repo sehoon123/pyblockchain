@@ -1,6 +1,6 @@
 .env
-.git
-.pytest_cache
-.__pycache__
+.git/
+.pytest_cache/
+__pycache__/
 blockchain.json
-.venv
+venv/

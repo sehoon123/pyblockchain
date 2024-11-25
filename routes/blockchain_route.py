@@ -6,8 +6,8 @@ import boto3
 from botocore.exceptions import NoCredentialsError
 from fastapi import APIRouter, HTTPException, Query, Request
 from dotenv import load_dotenv
-from blockchain import Blockchain, Transaction, NFT
-from models import (
+from models.blockchain import Blockchain, Transaction, NFT
+from models.blockchain_util import (
     MineBlockRequestModel,
     NFTModel,
     NFTDetailModel,
@@ -41,21 +41,33 @@ s3_client = boto3.client(
 ENDPOINTURL = s3_client.meta.endpoint_url
 
 s3_client = boto3.client(
-    's3',
+    "s3",
     endpoint_url=ENDPOINTURL,
     region_name=AWS_REGION,
     aws_access_key_id=AWS_ACCESS_KEY_ID,
     aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
 )
 
-ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/heif", "image/apng", "image/avif", "image/gif", "image/webp"}
+ALLOWED_IMAGE_TYPES = {
+    "image/jpeg",
+    "image/png",
+    "image/heif",
+    "image/apng",
+    "image/avif",
+    "image/gif",
+    "image/webp",
+}
 
 router = APIRouter()
+
 
 @router.get("/generate_presigned_url")
 def generate_presigned_url(
     file_name: str = Query(..., description="Name of the file to upload"),
-    content_type: str = Query("application/octet-stream", description="Content-Type of the file (default: application/octet-stream)")
+    content_type: str = Query(
+        "application/octet-stream",
+        description="Content-Type of the file (default: application/octet-stream)",
+    ),
 ):
     """
     Generate a pre-signed URL for S3 file upload.
@@ -65,7 +77,7 @@ def generate_presigned_url(
     if content_type not in ALLOWED_IMAGE_TYPES:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported Content-Type. Allowed types: {', '.join(ALLOWED_IMAGE_TYPES)}"
+            detail=f"Unsupported Content-Type. Allowed types: {', '.join(ALLOWED_IMAGE_TYPES)}",
         )
 
     try:
@@ -78,7 +90,7 @@ def generate_presigned_url(
                 "ContentType": content_type,  # Set Content-Type
                 "Metadata": {
                     "x-amz-meta-max-size": "10485760",  # 10MB limit
-                }
+                },
             },
             ExpiresIn=300,  # URL expiration time in seconds (3600s = 1 hour)
             HttpMethod="PUT",
@@ -106,6 +118,7 @@ def get_current_owner(dna: str) -> Optional[str]:
                 owner = tx["receiver"]
     return owner
 
+
 @router.post("/create_transaction", response_model=TransactionModel)
 def create_transaction(transaction: TransactionModel):
     """
@@ -117,7 +130,9 @@ def create_transaction(transaction: TransactionModel):
         if transaction.nft:
             current_owner = get_current_owner(transaction.nft.dna)
             if current_owner and current_owner != transaction.sender:
-                raise ValueError(f"Sender {transaction.sender} is not the current owner of the NFT.")
+                raise ValueError(
+                    f"Sender {transaction.sender} is not the current owner of the NFT."
+                )
             elif not current_owner and transaction.sender != "SYSTEM":
                 raise ValueError("NFT does not exist. Only 'SYSTEM' can create NFTs.")
 
@@ -131,7 +146,9 @@ def create_transaction(transaction: TransactionModel):
                 dna=transaction.nft.dna,
                 edition=transaction.nft.edition,  # Now optional
                 date=transaction.nft.date,
-                attributes=[attr.dict() for attr in transaction.nft.attributes] if transaction.nft.attributes else None,
+                attributes=[attr.dict() for attr in transaction.nft.attributes]
+                if transaction.nft.attributes
+                else None,
                 compiler=transaction.nft.compiler,  # Now optional
             )
         tx = Transaction(
@@ -164,19 +181,23 @@ def broadcast_transaction(transaction: TransactionModel):
     broadcast_errors = []
     for node in blockchain.nodes:
         try:
-            response = requests.post(f'{node}/api/create_transaction', json=transaction.dict())
+            response = requests.post(
+                f"{node}/api/create_transaction", json=transaction.dict()
+            )
             if response.status_code != 200:
-                broadcast_errors.append(f"Failed to broadcast to {node}: {response.text}")
+                broadcast_errors.append(
+                    f"Failed to broadcast to {node}: {response.text}"
+                )
         except requests.exceptions.RequestException as e:
             broadcast_errors.append(f"Failed to broadcast to {node}: {e}")
 
     if broadcast_errors:
         return {
-            'message': 'Transaction broadcasted with some errors.',
-            'errors': broadcast_errors,
+            "message": "Transaction broadcasted with some errors.",
+            "errors": broadcast_errors,
         }
 
-    return {'message': 'Transaction broadcasted successfully.'}
+    return {"message": "Transaction broadcasted successfully."}
 
 
 @router.post("/mine_block", response_model=MineBlockResponse)
@@ -212,14 +233,18 @@ def mine_block(request: MineBlockRequestModel):
         for node in blockchain.nodes:
             print(f"Broadcasting block to node: {node}")
             try:
-                response = requests.post(f'{node}/api/receive_block', json=block_model.dict())
+                response = requests.post(
+                    f"{node}/api/receive_block", json=block_model.dict()
+                )
                 if response.status_code != 200:
                     print(f"Failed to broadcast block to {node}: {response.text}")
             except requests.exceptions.RequestException as e:
                 print(f"Error broadcasting block to {node}: {e}")
         # Synchronize the chain after mining
         blockchain.replace_chain()  # Replace the chain if needed
-        return MineBlockResponse(message="Block mined and broadcasted successfully", block=block_model)
+        return MineBlockResponse(
+            message="Block mined and broadcasted successfully", block=block_model
+        )
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
@@ -344,10 +369,13 @@ def get_nft_by_dna(dna: str):
 
     if nft_found and owner:
         print(f"NFT found: {nft_found}")
-        return NFTDetailModel(nft=nft_found, owner=owner, last_block_index=last_block_index)
+        return NFTDetailModel(
+            nft=nft_found, owner=owner, last_block_index=last_block_index
+        )
 
     print("NFT not found")
     raise HTTPException(status_code=404, detail="NFT not found")
+
 
 @router.get("/transactions", response_model=List[TransactionModel])
 def get_confirmed_transactions():
@@ -369,6 +397,7 @@ def get_confirmed_transactions():
         return transactions
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/pending_transactions", response_model=List[TransactionModel])
 def get_pending_transactions():
@@ -395,24 +424,30 @@ def get_pending_transactions():
 @router.get("/block", response_model=BlockModel)
 def get_block(
     index: Optional[int] = Query(None, description="Index of the block to retrieve"),
-    hash: Optional[str] = Query(None, description="Hash of the block to retrieve")
+    hash: Optional[str] = Query(None, description="Hash of the block to retrieve"),
 ):
     """
     Retrieve a specific block by its index or hash.
     """
     if index is None and hash is None:
-        raise HTTPException(status_code=400, detail="Either 'index' or 'hash' must be provided.")
+        raise HTTPException(
+            status_code=400, detail="Either 'index' or 'hash' must be provided."
+        )
 
     block = None
 
     if index is not None:
         block = blockchain.get_block_by_index(index)
         if not block:
-            raise HTTPException(status_code=404, detail=f"Block with index {index} not found.")
+            raise HTTPException(
+                status_code=404, detail=f"Block with index {index} not found."
+            )
     elif hash is not None:
         block = blockchain.get_block_by_hash(hash)
         if not block:
-            raise HTTPException(status_code=404, detail=f"Block with hash {hash} not found.")
+            raise HTTPException(
+                status_code=404, detail=f"Block with hash {hash} not found."
+            )
 
     # Convert block dict to BlockModel
     transactions = []
@@ -467,8 +502,10 @@ def register_node(node: NodeRegisterModel):
         print(f"Node {node_address} is already registered.")
 
     response = {
-        'message': 'New node has been added' if not already_exists else 'Node already exists',
-        'total_nodes': list(blockchain.nodes),
+        "message": "New node has been added"
+        if not already_exists
+        else "Node already exists",
+        "total_nodes": list(blockchain.nodes),
     }
 
     # Broadcast the new node to all existing nodes except itself
@@ -476,7 +513,10 @@ def register_node(node: NodeRegisterModel):
         if existing_node != node_address and existing_node != current_node:
             try:
                 print(f"Broadcasting new node to {existing_node}")
-                requests.post(f'{existing_node}/api/register_node', json={'node_address': node_address})
+                requests.post(
+                    f"{existing_node}/api/register_node",
+                    json={"node_address": node_address},
+                )
             except requests.exceptions.RequestException as e:
                 print(f"Failed to broadcast to {existing_node}: {e}")
 
@@ -501,15 +541,16 @@ def replace_chain():
     is_replaced = blockchain.replace_chain()
     if is_replaced:
         response = {
-            'message': 'The chain was replaced by the longest one.',
-            'new_chain': blockchain.chain,
+            "message": "The chain was replaced by the longest one.",
+            "new_chain": blockchain.chain,
         }
     else:
         response = {
-            'message': 'Current chain is already the longest.',
-            'chain': blockchain.chain,
+            "message": "Current chain is already the longest.",
+            "chain": blockchain.chain,
         }
     return response
+
 
 # Block broadcast endpoint
 @router.post("/broadcast_block")
@@ -524,10 +565,10 @@ def broadcast_block(block: BlockModel):
     # Send the block to other nodes
     for node in blockchain.nodes:
         try:
-            response = requests.post(f'{node}/api/receive_block', json=block.dict())
+            response = requests.post(f"{node}/api/receive_block", json=block.dict())
         except requests.exceptions.RequestException:
             continue
-    return {'message': 'Block broadcasted successfully.'}
+    return {"message": "Block broadcasted successfully."}
 
 
 # Block reception endpoint
@@ -543,10 +584,14 @@ def receive_block(block: BlockModel):
             # If the block was not added, check if the received chain is longer
             replaced = blockchain.replace_chain()
             if replaced:
-                return {'message': 'Chain was replaced with the longest one after receiving block.'}
+                return {
+                    "message": "Chain was replaced with the longest one after receiving block."
+                }
             else:
-                raise HTTPException(status_code=400, detail="Invalid block and chain not replaced.")
-        return {'message': 'Block added successfully.'}
+                raise HTTPException(
+                    status_code=400, detail="Invalid block and chain not replaced."
+                )
+        return {"message": "Block added successfully."}
     except KeyError as ke:
         raise HTTPException(status_code=400, detail=f"Missing key in block data: {ke}")
     except Exception as e:
