@@ -12,10 +12,10 @@ class NFT:
         description: str,
         image: str,
         dna: str,
-        edition: int,
-        date: int,
-        attributes: list,
-        compiler: str,
+        edition: Optional[int] = None,  # Made optional
+        date: int = 0,
+        attributes: Optional[list] = None,  # Made optional
+        compiler: Optional[str] = None,  # Made optional
     ) -> None:
         self.name = name
         self.description = description
@@ -23,7 +23,7 @@ class NFT:
         self.dna = dna
         self.edition = edition
         self.date = date
-        self.attributes = attributes
+        self.attributes = attributes if attributes is not None else []
         self.compiler = compiler
 
     def to_dict(self) -> dict:
@@ -45,10 +45,10 @@ class NFT:
             description=data['description'],
             image=data['image'],
             dna=data['dna'],
-            edition=data['edition'],
-            date=data['date'],
-            attributes=data['attributes'],
-            compiler=data['compiler'],
+            edition=data.get('edition'),  # Handle missing key
+            date=data.get('date', 0),  # Provide default if missing
+            attributes=data.get('attributes', []),  # Provide default if missing
+            compiler=data.get('compiler'),  # Handle missing key
         )
 
     def __str__(self) -> str:
@@ -81,13 +81,14 @@ class Transaction:
 
     @staticmethod
     def from_dict(data: dict):
-        nft = NFT.from_dict(data['nft']) if data['nft'] else None
+        nft_data = data.get('nft')
+        nft = NFT.from_dict(nft_data) if nft_data else None
         return Transaction(
             sender=data['sender'],
             receiver=data['receiver'],
             nft=nft,
             price=data['price'],
-            timestamp=data['timestamp'],
+            timestamp=data.get('timestamp'),
         )
 
     def __str__(self) -> str:
@@ -99,11 +100,11 @@ class Blockchain:
         self.chain: List[dict] = []
         self.pending_transactions: List[Transaction] = []
         self.chain_file = 'blockchain.json'
-        self.nodes: Set[str] = set()  # 노드 목록을 저장하는 세트
+        self.nodes: Set[str] = set()  # Set to store node addresses
 
-        # 블록체인 로드 시도
+        # Attempt to load the blockchain from file
         if not self.load_from_file():
-            # 로드 실패 시, 제네시스 블록 생성
+            # If loading fails, create the genesis block
             genesis_block = self._create_block(
                 proof=1,
                 previous_hash="0",
@@ -111,49 +112,43 @@ class Blockchain:
                 transactions=[],
             )
             self.chain.append(genesis_block)
-            # 새로운 블록체인 저장
+            # Save the new blockchain to file
             self.save_to_file()
-    
 
-    # 블록 추가 메서드 추가
     def add_block(self, block_data: dict) -> bool:
         """
-        수신한 블록을 체인에 추가합니다.
+        Add a received block to the chain after verification.
         """
         previous_block = self.get_previous_block()
         if previous_block['index'] + 1 != block_data['index']:
             print(f"Invalid index: expected {previous_block['index'] + 1}, got {block_data['index']}")
             return False
-        
-        # 이전 블록의 해시를 계산하여 비교
+
+        # Verify previous hash
         previous_block_hash = self._hash(previous_block)
         if previous_block_hash != block_data['previous_hash']:
             print(f"Invalid previous hash: expected {previous_block_hash}, got {block_data['previous_hash']}")
             return False
-        
+
         if not self.is_chain_valid(self.chain + [block_data]):
             print("Chain validation failed after adding the new block.")
             return False
-        
+
         self.chain.append(block_data)
         self.save_to_file()
         print(f"Block {block_data['index']} added successfully.")
         return True
 
-
-    # 노드 등록 메서드 추가
     def register_node(self, address: str):
         """
-        새로운 노드를 등록합니다.
-        address: 예) 'http://192.168.0.5:5000'
+        Register a new node in the network.
+        Example address: 'http://192.168.0.5:5000'
         """
         self.nodes.add(address)
 
-    # 체인 대체 메서드 추가
     def replace_chain(self) -> bool:
         """
-        네트워크의 다른 노드들과 체인을 비교하여,
-        자신의 체인을 가장 긴 유효한 체인으로 대체합니다.
+        Replace the chain with the longest one in the network if it's valid.
         """
         network = self.nodes
         longest_chain = None
@@ -169,7 +164,7 @@ class Blockchain:
                         max_length = length
                         longest_chain = chain
             except requests.exceptions.RequestException:
-                continue  # 노드에 연결할 수 없으면 다음 노드로
+                continue  # Skip nodes that are not reachable
 
         if longest_chain:
             self.chain = longest_chain
@@ -180,7 +175,7 @@ class Blockchain:
 
     def create_transaction(self, transaction: Transaction) -> int:
         self.pending_transactions.append(transaction)
-        # 트랜잭션 생성 후 저장
+        # Save after creating a transaction
         self.save_to_file()
         return self.get_previous_block()["index"] + 1
 
@@ -194,7 +189,7 @@ class Blockchain:
         proof = self._proof_of_work(previous_proof, index)
         previous_hash = self._hash(previous_block)
 
-        # 마이너에게 보상 트랜잭션 추가
+        # Add a reward transaction for the miner
         system_transaction = Transaction(
             sender="SYSTEM",
             receiver=miner_address,
@@ -212,7 +207,7 @@ class Blockchain:
         )
         self.chain.append(block)
         self.pending_transactions = []
-        # 블록 마이닝 후 저장
+        # Save after mining a block
         self.save_to_file()
         return block
 
@@ -259,12 +254,12 @@ class Blockchain:
         while block_index < len(chain):
             next_block = chain[block_index]
 
-            # 이전 해시 확인
+            # Verify previous hash
             if next_block["previous_hash"] != self._hash(current_block):
                 print(f"Invalid previous hash at block {block_index}")
                 return False
 
-            # 작업 증명 확인
+            # Verify proof of work
             current_proof = current_block["proof"]
             next_proof = next_block["proof"]
             index = next_block["index"]
@@ -280,7 +275,6 @@ class Blockchain:
 
         return True
 
-
     def get_block_by_index(self, index: int) -> Optional[dict]:
         for block in self.chain:
             if block['index'] == index:
@@ -294,7 +288,6 @@ class Blockchain:
                 return block
         return None
 
-    # 블록체인 저장 메서드 추가
     def save_to_file(self):
         data = {
             'chain': self.chain,
@@ -304,7 +297,6 @@ class Blockchain:
             _json.dump(data, f, indent=4)
         print("Blockchain saved to file.")
 
-    # 블록체인 로드 메서드 추가
     def load_from_file(self) -> bool:
         try:
             with open(self.chain_file, 'r') as f:

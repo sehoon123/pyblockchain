@@ -14,10 +14,10 @@ class NFTModel(BaseModel):
     description: str
     image: str
     dna: str
-    edition: int
+    edition: Optional[int] = None  # Made optional
     date: int
-    attributes: List[Attribute]
-    compiler: str
+    attributes: Optional[List[Attribute]] = None  # Made optional
+    compiler: Optional[str] = None  # Made optional
 
 
 class TransactionModel(BaseModel):

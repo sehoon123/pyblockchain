@@ -317,6 +317,38 @@
             },
             "price": 0.0,
             "timestamp": "string"
+        },
+        {
+            "sender": "string",
+            "receiver": "string",
+            "nft": {
+                "name": "string",
+                "description": "string",
+                "image": "string",
+                "dna": "string",
+                "edition": 0,
+                "date": 0,
+                "attributes": [],
+                "compiler": "string"
+            },
+            "price": 0.0,
+            "timestamp": "string"
+        },
+        {
+            "sender": "string",
+            "receiver": "string",
+            "nft": {
+                "name": "string",
+                "description": "string",
+                "image": "string",
+                "dna": "string",
+                "edition": null,
+                "date": 0,
+                "attributes": [],
+                "compiler": null
+            },
+            "price": 0.0,
+            "timestamp": "string"
         }
     ]
 }

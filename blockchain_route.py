@@ -60,7 +60,7 @@ def generate_presigned_url(
     Generate a pre-signed URL for S3 file upload.
     """
 
-    # verify content type
+    # Verify content type
     if content_type not in ALLOWED_IMAGE_TYPES:
         raise HTTPException(
             status_code=400,
@@ -124,10 +124,10 @@ def create_transaction(transaction: TransactionModel):
                 description=transaction.nft.description,
                 image=transaction.nft.image,
                 dna=transaction.nft.dna,
-                edition=transaction.nft.edition,
+                edition=transaction.nft.edition,  # Now optional
                 date=transaction.nft.date,
-                attributes=[attr.dict() for attr in transaction.nft.attributes],
-                compiler=transaction.nft.compiler,
+                attributes=[attr.dict() for attr in transaction.nft.attributes] if transaction.nft.attributes else None,
+                compiler=transaction.nft.compiler,  # Now optional
             )
         tx = Transaction(
             sender=transaction.sender,
@@ -137,7 +137,7 @@ def create_transaction(transaction: TransactionModel):
             timestamp=transaction.timestamp,
         )
         index = blockchain.create_transaction(tx)
-        # 트랜잭션 생성 후 블록체인 저장
+        # Save blockchain after creating transaction
         blockchain.save_to_file()
         return transaction
     except Exception as e:
@@ -164,7 +164,7 @@ def mine_block(request: MineBlockRequestModel):
                 TransactionModel(
                     sender=tx["sender"],
                     receiver=tx["receiver"],
-                    nft=NFTModel(**tx["nft"]) if tx["nft"] else None,
+                    nft=NFTModel(**tx["nft"]) if tx.get("nft") else None,
                     price=tx["price"],
                     timestamp=tx["timestamp"],
                 )
@@ -173,21 +173,20 @@ def mine_block(request: MineBlockRequestModel):
             proof=block["proof"],
             previous_hash=block["previous_hash"],
         )
-        # 다른 노드들에게 새로운 블록 브로드캐스트
+        # Broadcast the new block to other nodes
         for node in blockchain.nodes:
             print(node)
             try:
                 response = requests.post(f'{node}/api/receive_block', json=block_model.dict())
             except requests.exceptions.RequestException:
                 continue
-        # 마이닝 후 동기화
-        blockchain.replace_chain()  # 체인 대체
+        # Synchronize the chain after mining
+        blockchain.replace_chain()  # Replace the chain if needed
         return MineBlockResponse(message="Block mined and broadcasted successfully", block=block_model)
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 
 @router.get("/blockchain", response_model=BlockchainModel)
@@ -337,7 +336,7 @@ def get_all_transactions():
     return transactions
 
 
-# 새로운 블록 검색 엔드포인트 추가
+# New block retrieval endpoint
 @router.get("/block", response_model=BlockModel)
 def get_block(
     index: Optional[int] = Query(None, description="Index of the block to retrieve"),
@@ -386,11 +385,11 @@ def get_block(
     return block_model
 
 
-# 노드 등록 엔드포인트 추가
+# Node registration endpoint
 @router.post("/register_node")
 def register_node(node: NodeRegisterModel):
     """
-    새로운 노드를 네트워크에 등록합니다.
+    Register a new node in the network.
     """
     node_address = node.node_address
 
@@ -404,11 +403,11 @@ def register_node(node: NodeRegisterModel):
     }
     return response
 
-# 체인 대체 엔드포인트 추가
+# Chain replacement endpoint
 @router.get("/replace_chain")
 def replace_chain():
     """
-    네트워크의 다른 노드들과 비교하여 체인을 대체합니다.
+    Compare and replace the chain with the longest one in the network.
     """
     is_replaced = blockchain.replace_chain()
     if is_replaced:
@@ -423,19 +422,19 @@ def replace_chain():
         }
     return response
 
-# 트랜잭션 브로드캐스트 엔드포인트 추가
+# Transaction broadcast endpoint
 @router.post("/broadcast_transaction")
 def broadcast_transaction(transaction: TransactionModel):
     """
-    트랜잭션을 다른 노드들에게 브로드캐스트합니다.
+    Broadcast a transaction to other nodes in the network.
     """
-    # 현재 노드에서 트랜잭션 검증 및 생성
+    # Validate and create the transaction on the current node
     try:
-        create_transaction(transaction)  # 내부적으로 유효성 검증이 이루어짐
+        create_transaction(transaction)  # Internal validation occurs here
     except HTTPException as e:
         return {'message': f"Transaction validation failed: {e.detail}"}
 
-    # 트랜잭션 브로드캐스트
+    # Broadcast the transaction to other nodes
     broadcast_errors = []
     for node in blockchain.nodes:
         try:
@@ -453,18 +452,17 @@ def broadcast_transaction(transaction: TransactionModel):
 
     return {'message': 'Transaction broadcasted successfully.'}
 
-
-# 블록 브로드캐스트 엔드포인트 추가
+# Block broadcast endpoint
 @router.post("/broadcast_block")
 def broadcast_block(block: BlockModel):
     """
-    새로운 블록을 다른 노드들에게 브로드캐스트합니다.
+    Broadcast a new block to other nodes in the network.
     """
-    # 블록을 체인에 추가하기 전에 유효성 검사
+    # Validate and add the block to the chain before broadcasting
     added = blockchain.add_block(block.dict())
     if not added:
         raise HTTPException(status_code=400, detail="Invalid block")
-    # 다른 노드들에게 블록 전송
+    # Send the block to other nodes
     for node in blockchain.nodes:
         try:
             response = requests.post(f'{node}/api/receive_block', json=block.dict())
@@ -472,11 +470,11 @@ def broadcast_block(block: BlockModel):
             continue
     return {'message': 'Block broadcasted successfully.'}
 
-# 블록 수신 엔드포인트 추가
+# Block reception endpoint
 @router.post("/receive_block")
 def receive_block(block: BlockModel):
     """
-    다른 노드로부터 블록을 수신하여 체인에 추가합니다.
+    Receive a block from another node and add it to the chain.
     """
     try:
         block_data = block.dict()
