@@ -1,7 +1,7 @@
 # blockchain_route.py
 import os
-import requests
 from typing import List, Optional
+import requests
 import boto3
 from botocore.exceptions import NoCredentialsError
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -17,6 +17,7 @@ from models import (
     BlockchainModel,
     MineBlockResponse,
 )
+
 
 # Load environment variables
 load_dotenv()
@@ -105,7 +106,8 @@ def get_current_owner(dna: str) -> Optional[str]:
 @router.post("/create_transaction", response_model=TransactionModel)
 def create_transaction(transaction: TransactionModel):
     """
-    Create a new NFT transaction and add it to the list of pending transactions.
+    Internal endpoint to add a new NFT transaction to the list of pending transactions.
+    This endpoint is used by /broadcast_transaction to propagate transactions.
     """
     try:
         # If the transaction involves an NFT, verify ownership
@@ -144,6 +146,36 @@ def create_transaction(transaction: TransactionModel):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.post("/broadcast_transaction")
+def broadcast_transaction(transaction: TransactionModel):
+    """
+    Broadcast a transaction to other nodes in the network.
+    """
+    # Validate and create the transaction on the current node
+    try:
+        create_transaction(transaction)  # Internal validation occurs here
+    except HTTPException as e:
+        return {'message': f"Transaction validation failed: {e.detail}"}
+
+    # Broadcast the transaction to other nodes
+    broadcast_errors = []
+    for node in blockchain.nodes:
+        try:
+            response = requests.post(f'{node}/api/create_transaction', json=transaction.dict())
+            if response.status_code != 200:
+                broadcast_errors.append(f"Failed to broadcast to {node}: {response.text}")
+        except requests.exceptions.RequestException as e:
+            broadcast_errors.append(f"Failed to broadcast to {node}: {e}")
+
+    if broadcast_errors:
+        return {
+            'message': 'Transaction broadcasted with some errors.',
+            'errors': broadcast_errors,
+        }
+
+    return {'message': 'Transaction broadcasted successfully.'}
+
+
 @router.post("/mine_block", response_model=MineBlockResponse)
 def mine_block(request: MineBlockRequestModel):
     """
@@ -175,11 +207,13 @@ def mine_block(request: MineBlockRequestModel):
         )
         # Broadcast the new block to other nodes
         for node in blockchain.nodes:
-            print(node)
+            print(f"Broadcasting block to node: {node}")
             try:
                 response = requests.post(f'{node}/api/receive_block', json=block_model.dict())
-            except requests.exceptions.RequestException:
-                continue
+                if response.status_code != 200:
+                    print(f"Failed to broadcast block to {node}: {response.text}")
+            except requests.exceptions.RequestException as e:
+                print(f"Error broadcasting block to {node}: {e}")
         # Synchronize the chain after mining
         blockchain.replace_chain()  # Replace the chain if needed
         return MineBlockResponse(message="Block mined and broadcasted successfully", block=block_model)
@@ -312,28 +346,46 @@ def get_nft_by_dna(dna: str):
     print("NFT not found")
     raise HTTPException(status_code=404, detail="NFT not found")
 
-
 @router.get("/transactions", response_model=List[TransactionModel])
-def get_all_transactions():
+def get_confirmed_transactions():
     """
-    Retrieve all transactions in the blockchain.
+    Retrieve all confirmed transactions that are included in the blockchain.
     """
     transactions = []
-    for block in blockchain.chain:
-        for tx in block["transactions"]:
-            if tx["nft"]:
-                nft = NFTModel(**tx["nft"])
-            else:
-                nft = None
-            transaction = TransactionModel(
-                sender=tx["sender"],
-                receiver=tx["receiver"],
-                nft=nft,
-                price=tx["price"],
-                timestamp=tx["timestamp"],
+    try:
+        for block in blockchain.chain:
+            for tx in block["transactions"]:
+                transaction = TransactionModel(
+                    sender=tx["sender"],
+                    receiver=tx["receiver"],
+                    nft=tx["nft"],
+                    price=tx["price"],
+                    timestamp=tx["timestamp"],
+                )
+                transactions.append(transaction)
+        return transactions
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/pending_transactions", response_model=List[TransactionModel])
+def get_pending_transactions():
+    """
+    Retrieve all pending transactions that are awaiting inclusion in a block.
+    """
+    try:
+        pending_txs = [
+            TransactionModel(
+                sender=tx.sender,
+                receiver=tx.receiver,
+                nft=tx.nft.to_dict() if tx.nft else None,
+                price=tx.price,
+                timestamp=tx.timestamp,
             )
-            transactions.append(transaction)
-    return transactions
+            for tx in blockchain.pending_transactions
+        ]
+        return pending_txs
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # New block retrieval endpoint
@@ -389,19 +441,53 @@ def get_block(
 @router.post("/register_node")
 def register_node(node: NodeRegisterModel):
     """
-    Register a new node in the network.
+    Register a new node in the network and propagate it to all existing nodes.
     """
     node_address = node.node_address
 
     if not node_address:
         raise HTTPException(status_code=400, detail="Invalid node address")
 
+    # Prevent registering the current node
+    current_host = os.getenv("HOST", "localhost")
+    current_port = os.getenv("PORT", "8000")
+    current_node = f"http://{current_host}:{current_port}"
+    if node_address == current_node:
+        raise HTTPException(status_code=400, detail="Cannot register the current node.")
+
+    # Register the node (idempotent operation)
+    already_exists = node_address in blockchain.nodes
     blockchain.register_node(node_address)
+    if not already_exists:
+        print(f"Node {node_address} registered successfully.")
+    else:
+        print(f"Node {node_address} is already registered.")
+
     response = {
-        'message': 'New node has been added',
+        'message': 'New node has been added' if not already_exists else 'Node already exists',
         'total_nodes': list(blockchain.nodes),
     }
+
+    # Broadcast the new node to all existing nodes except itself
+    for existing_node in blockchain.nodes:
+        if existing_node != node_address and existing_node != current_node:
+            try:
+                print(f"Broadcasting new node to {existing_node}")
+                requests.post(f'{existing_node}/api/register_node', json={'node_address': node_address})
+            except requests.exceptions.RequestException as e:
+                print(f"Failed to broadcast to {existing_node}: {e}")
+
     return response
+
+
+# Get nodes endpoint
+@router.get("/get_nodes", response_model=List[str])
+def get_nodes():
+    """
+    Retrieve the list of all nodes in the network.
+    """
+    return list(blockchain.nodes)
+
 
 # Chain replacement endpoint
 @router.get("/replace_chain")
@@ -422,36 +508,6 @@ def replace_chain():
         }
     return response
 
-# Transaction broadcast endpoint
-@router.post("/broadcast_transaction")
-def broadcast_transaction(transaction: TransactionModel):
-    """
-    Broadcast a transaction to other nodes in the network.
-    """
-    # Validate and create the transaction on the current node
-    try:
-        create_transaction(transaction)  # Internal validation occurs here
-    except HTTPException as e:
-        return {'message': f"Transaction validation failed: {e.detail}"}
-
-    # Broadcast the transaction to other nodes
-    broadcast_errors = []
-    for node in blockchain.nodes:
-        try:
-            response = requests.post(f'{node}/api/create_transaction', json=transaction.dict())
-            if response.status_code != 200:
-                broadcast_errors.append(f"Failed to broadcast to {node}: {response.text}")
-        except requests.exceptions.RequestException as e:
-            broadcast_errors.append(f"Failed to broadcast to {node}: {e}")
-
-    if broadcast_errors:
-        return {
-            'message': 'Transaction broadcasted with some errors.',
-            'errors': broadcast_errors,
-        }
-
-    return {'message': 'Transaction broadcasted successfully.'}
-
 # Block broadcast endpoint
 @router.post("/broadcast_block")
 def broadcast_block(block: BlockModel):
@@ -470,6 +526,7 @@ def broadcast_block(block: BlockModel):
             continue
     return {'message': 'Block broadcasted successfully.'}
 
+
 # Block reception endpoint
 @router.post("/receive_block")
 def receive_block(block: BlockModel):
@@ -480,7 +537,12 @@ def receive_block(block: BlockModel):
         block_data = block.dict()
         added = blockchain.add_block(block_data)
         if not added:
-            raise HTTPException(status_code=400, detail="Invalid block")
+            # If the block was not added, check if the received chain is longer
+            replaced = blockchain.replace_chain()
+            if replaced:
+                return {'message': 'Chain was replaced with the longest one after receiving block.'}
+            else:
+                raise HTTPException(status_code=400, detail="Invalid block and chain not replaced.")
         return {'message': 'Block added successfully.'}
     except KeyError as ke:
         raise HTTPException(status_code=400, detail=f"Missing key in block data: {ke}")

@@ -115,6 +115,23 @@ class Blockchain:
             # Save the new blockchain to file
             self.save_to_file()
 
+    def _remove_transactions(self, new_block_transactions: List[dict]):
+        """
+        Remove transactions from pending_transactions that are included in the new block.
+        """
+        new_block_txs = set()
+        for tx in new_block_transactions:
+            tx_str = _json.dumps(tx, sort_keys=True)
+            new_block_txs.add(tx_str)
+
+        updated_pending = []
+        for tx in self.pending_transactions:
+            if _json.dumps(tx.to_dict(), sort_keys=True) not in new_block_txs:
+                updated_pending.append(tx)
+        self.pending_transactions = updated_pending
+        self.save_to_file()
+        print("Pending transactions updated after adding new block.")
+
     def add_block(self, block_data: dict) -> bool:
         """
         Add a received block to the chain after verification.
@@ -137,15 +154,22 @@ class Blockchain:
         self.chain.append(block_data)
         self.save_to_file()
         print(f"Block {block_data['index']} added successfully.")
+
+        # Remove transactions from pending_transactions that are included in the new block
+        self._remove_transactions(block_data['transactions'])
+
         return True
 
+    # Node registration method
     def register_node(self, address: str):
         """
         Register a new node in the network.
-        Example address: 'http://192.168.0.5:5000'
+        address: Example - 'http://192.168.0.5:5000'
         """
         self.nodes.add(address)
+        print(f"Node {address} registered. Total nodes: {len(self.nodes)}")
 
+    # Chain replacement method
     def replace_chain(self) -> bool:
         """
         Replace the chain with the longest one in the network if it's valid.
@@ -169,8 +193,10 @@ class Blockchain:
         if longest_chain:
             self.chain = longest_chain
             self.save_to_file()
+            print("Chain was replaced with the longest one.")
             return True
 
+        print("Current chain is already the longest.")
         return False
 
     def create_transaction(self, transaction: Transaction) -> int:
@@ -209,6 +235,7 @@ class Blockchain:
         self.pending_transactions = []
         # Save after mining a block
         self.save_to_file()
+        print(f"Block {index} mined successfully.")
         return block
 
     def _hash(self, block: dict) -> str:
