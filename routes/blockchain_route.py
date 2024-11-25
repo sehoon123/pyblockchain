@@ -4,7 +4,7 @@ from typing import List, Optional
 import requests
 import boto3
 from botocore.exceptions import NoCredentialsError
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request, Depends
 from dotenv import load_dotenv
 from models.blockchain import Blockchain, Transaction, NFT
 from models.blockchain_util import (
@@ -17,7 +17,7 @@ from models.blockchain_util import (
     BlockchainModel,
     MineBlockResponse,
 )
-
+from utils.security import verify_request_signature, send_signed_request  # Added
 
 # Load environment variables
 load_dotenv()
@@ -57,6 +57,14 @@ ALLOWED_IMAGE_TYPES = {
     "image/gif",
     "image/webp",
 }
+
+
+# Dependencies
+async def verify_signature_dependency(request: Request):
+    from main import SECRET_KEY  # Import the secret key
+
+    await verify_request_signature(request, SECRET_KEY)
+
 
 router = APIRouter()
 
@@ -119,7 +127,11 @@ def get_current_owner(dna: str) -> Optional[str]:
     return owner
 
 
-@router.post("/create_transaction", response_model=TransactionModel)
+@router.post(
+    "/create_transaction",
+    response_model=TransactionModel,
+    dependencies=[Depends(verify_signature_dependency)],
+)
 def create_transaction(transaction: TransactionModel):
     """
     Internal endpoint to add a new NFT transaction to the list of pending transactions.
@@ -166,7 +178,10 @@ def create_transaction(transaction: TransactionModel):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/broadcast_transaction")
+@router.post(
+    "/broadcast_transaction",
+    dependencies=[Depends(verify_signature_dependency)],
+)
 def broadcast_transaction(transaction: TransactionModel):
     """
     Broadcast a transaction to other nodes in the network.
@@ -179,10 +194,13 @@ def broadcast_transaction(transaction: TransactionModel):
 
     # Broadcast the transaction to other nodes
     broadcast_errors = []
+    from main import SECRET_KEY  # SECRET_KEY 가져오기
+
     for node in blockchain.nodes:
         try:
-            response = requests.post(
-                f"{node}/api/create_transaction", json=transaction.dict()
+            # 서명된 요청 보내기
+            response = send_signed_request(
+                f"{node}/api/create_transaction", transaction.dict(), SECRET_KEY
             )
             if response.status_code != 200:
                 broadcast_errors.append(
@@ -200,7 +218,11 @@ def broadcast_transaction(transaction: TransactionModel):
     return {"message": "Transaction broadcasted successfully."}
 
 
-@router.post("/mine_block", response_model=MineBlockResponse)
+@router.post(
+    "/mine_block",
+    response_model=MineBlockResponse,
+    dependencies=[Depends(verify_signature_dependency)],
+)
 def mine_block(request: MineBlockRequestModel):
     """
     Mine a new block by adding all pending transactions to the blockchain.
@@ -230,11 +252,15 @@ def mine_block(request: MineBlockRequestModel):
             previous_hash=block["previous_hash"],
         )
         # Broadcast the new block to other nodes
+        from main import SECRET_KEY  # Import the secret key
+
         for node in blockchain.nodes:
             print(f"Broadcasting block to node: {node}")
             try:
-                response = requests.post(
-                    f"{node}/api/receive_block", json=block_model.dict()
+                response = send_signed_request(
+                    f"{node}/api/receive_block",
+                    block_model.dict(),
+                    SECRET_KEY,
                 )
                 if response.status_code != 200:
                     print(f"Failed to broadcast block to {node}: {response.text}")
@@ -476,7 +502,10 @@ def get_block(
 
 
 # Node registration endpoint
-@router.post("/register_node")
+@router.post(
+    "/register_node",
+    dependencies=[Depends(verify_signature_dependency)],
+)
 def register_node(node: NodeRegisterModel):
     """
     Register a new node in the network and propagate it to all existing nodes.
@@ -509,13 +538,16 @@ def register_node(node: NodeRegisterModel):
     }
 
     # Broadcast the new node to all existing nodes except itself
+    from main import SECRET_KEY  # Import the
+
     for existing_node in blockchain.nodes:
         if existing_node != node_address and existing_node != current_node:
             try:
                 print(f"Broadcasting new node to {existing_node}")
-                requests.post(
+                send_signed_request(
                     f"{existing_node}/api/register_node",
-                    json={"node_address": node_address},
+                    {"node_address": node_address},
+                    SECRET_KEY,
                 )
             except requests.exceptions.RequestException as e:
                 print(f"Failed to broadcast to {existing_node}: {e}")
@@ -553,7 +585,10 @@ def replace_chain():
 
 
 # Block broadcast endpoint
-@router.post("/broadcast_block")
+@router.post(
+    "/broadcast_block",
+    dependencies=[Depends(verify_signature_dependency)],
+)
 def broadcast_block(block: BlockModel):
     """
     Broadcast a new block to other nodes in the network.
@@ -563,16 +598,25 @@ def broadcast_block(block: BlockModel):
     if not added:
         raise HTTPException(status_code=400, detail="Invalid block")
     # Send the block to other nodes
+    from main import SECRET_KEY  # Import the secret key
+
     for node in blockchain.nodes:
         try:
-            response = requests.post(f"{node}/api/receive_block", json=block.dict())
+            response = send_signed_request(
+                f"{node}/api/receive_block",
+                block.dict(),
+                SECRET_KEY,
+            )
         except requests.exceptions.RequestException:
             continue
     return {"message": "Block broadcasted successfully."}
 
 
 # Block reception endpoint
-@router.post("/receive_block")
+@router.post(
+    "/receive_block",
+    dependencies=[Depends(verify_signature_dependency)],
+)
 def receive_block(block: BlockModel):
     """
     Receive a block from another node and add it to the chain.

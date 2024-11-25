@@ -6,6 +6,12 @@ import asyncio
 import os
 import requests
 import httpx
+from dotenv import load_dotenv  # Added
+from utils.security import send_signed_request_async  # Added
+
+load_dotenv()  # Added
+
+SECRET_KEY = os.getenv("SECRET_KEY")  # Added
 
 app = fastapi.FastAPI(title="NFT Blockchain API", version="0.2.1")
 
@@ -17,6 +23,21 @@ app.add_middleware(
     allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def cache_request_body(request: fastapi.Request, call_next):
+    # Read the body and cache it in request.state.body
+    request.state.body = await request.body()
+
+    # Reset the body stream so that it can be read again
+    async def receive():
+        return {"type": "http.request", "body": request.state.body}
+
+    request._receive = receive
+    response = await call_next(request)
+    return response
+
 
 # Include the blockchain router
 app.include_router(blockchain_router, prefix="/api", tags=["Blockchain"])
@@ -46,25 +67,17 @@ async def periodic_replace_chain():
 
 # Background task for mining blocks periodically
 async def periodic_mine_block():
-    await asyncio.sleep(60)  # 초기 지연 시간 (필요에 따라 조정 가능)
+    await asyncio.sleep(60)  # 초기 지연 시간
     while True:
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    "http://localhost:8000/api/mine_block",
-                    json={"miner_address": "main server"},
-                    headers={
-                        "Accept": "application/json",
-                        "Content-Type": "application/json",
-                    },
-                    timeout=10,  # 요청 타임아웃 설정 (초 단위)
-                )
-                if response.status_code == 200:
-                    print("자동 블록 채굴 성공:", response.json())
-                else:
-                    print(
-                        f"자동 블록 채굴 실패: {response.status_code}, {response.text}"
-                    )
+            data = {"miner_address": "main server"}
+            response = await send_signed_request_async(
+                "http://localhost:8000/api/mine_block", data, SECRET_KEY
+            )
+            if response.status_code == 200:
+                print("자동 블록 채굴 성공:", response.json())
+            else:
+                print(f"자동 블록 채굴 실패: {response.status_code}, {response.text}")
         except Exception as e:
             print(f"자동 블록 채굴 중 오류 발생: {e}")
 
