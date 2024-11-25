@@ -84,12 +84,12 @@ def upload_file_with_presigned_url(presigned_url, file_path):
 
 
 # Define the endpoint and file path
-file_path = "./IMG_9703.jpg"
-file_name = "tecors"
+file_path = "./logo.png"
+file_name = "logo.png"
 
 # Extract MIME type for pre-signed URL generation
 content_type = get_mime_type(file_path)
-presigned_url_endpoint = f"http://localhost:8000/generate_presigned_url?file_name={file_name}&content_type={content_type}"
+presigned_url_endpoint = f"http://localhost:8000/api/generate_presigned_url?file_name={file_name}&content_type={content_type}"
 
 try:
     # Fetch the presigned URL

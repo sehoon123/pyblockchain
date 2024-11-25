@@ -76,8 +76,11 @@ def generate_presigned_url(
                 "Bucket": S3_BUCKET_NAME,
                 "Key": file_key,
                 "ContentType": content_type,  # Set Content-Type
+                "Metadata": {
+                    "x-amz-meta-max-size": "10485760",  # 10MB limit
+                }
             },
-            ExpiresIn=3600,  # URL expiration time in seconds (3600s = 1 hour)
+            ExpiresIn=300,  # URL expiration time in seconds (3600s = 1 hour)
             HttpMethod="PUT",
         )
 
@@ -154,8 +157,8 @@ def broadcast_transaction(transaction: TransactionModel):
     # Validate and create the transaction on the current node
     try:
         create_transaction(transaction)  # Internal validation occurs here
-    except HTTPException as e:
-        return {'message': f"Transaction validation failed: {e.detail}"}
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=str(e))
 
     # Broadcast the transaction to other nodes
     broadcast_errors = []

@@ -5,6 +5,7 @@ from blockchain_route import router as blockchain_router
 import asyncio
 import os
 import requests
+import httpx
 
 app = fastapi.FastAPI(title="NFT Blockchain API", version="0.2.1")
 
@@ -39,9 +40,34 @@ async def periodic_replace_chain():
         except Exception as e:
             print(f"Error during replace_chain: {e}")
 
+# Background task for mining blocks periodically
+async def periodic_mine_block():
+    await asyncio.sleep(60)  # 초기 지연 시간 (필요에 따라 조정 가능)
+    while True:
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    "http://localhost:8000/api/mine_block",
+                    json={"miner_address": "main server"},
+                    headers={
+                        "Accept": "application/json",
+                        "Content-Type": "application/json"
+                    },
+                    timeout=10  # 요청 타임아웃 설정 (초 단위)
+                )
+                if response.status_code == 200:
+                    print("자동 블록 채굴 성공:", response.json())
+                else:
+                    print(f"자동 블록 채굴 실패: {response.status_code}, {response.text}")
+        except Exception as e:
+            print(f"자동 블록 채굴 중 오류 발생: {e}")
+        
+        await asyncio.sleep(60)  # 다음 실행까지 대기 시간
+
 @app.on_event("startup")
 async def startup_event():
     asyncio.create_task(periodic_replace_chain())
+    asyncio.create_task(periodic_mine_block())
 
     # Automatic node registration if not the bootstrap node
     host = os.getenv("HOST", "localhost")
