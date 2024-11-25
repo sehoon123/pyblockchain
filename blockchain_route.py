@@ -47,6 +47,8 @@ s3_client = boto3.client(
     aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
 )
 
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/heif", "image/apng", "image/avif", "image/gif", "image/webp"}
+
 router = APIRouter()
 
 @router.get("/generate_presigned_url")
@@ -57,6 +59,14 @@ def generate_presigned_url(
     """
     Generate a pre-signed URL for S3 file upload.
     """
+
+    # verify content type
+    if content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported Content-Type. Allowed types: {', '.join(ALLOWED_IMAGE_TYPES)}"
+        )
+
     try:
         file_key = f"nft_images/{file_name}"  # S3 file path
         presigned_url = s3_client.generate_presigned_url(
