@@ -27,12 +27,6 @@ async def verify_request_signature(request: Request, secret_key: str):
             status_code=400, detail=f"Failed to compute signature: {str(e)}"
         )
 
-    # Log signatures and body for debugging
-    print(f"Server Body Hex: {body_content.hex()}")
-    print(f"Server Signature: {computed_signature}")
-    print(f"Received Signature: {signature}")
-    print(f"Request Body: {body_content.decode('utf-8')}")
-
     if not hmac.compare_digest(signature, computed_signature):
         raise HTTPException(status_code=401, detail="Invalid signature")
 
@@ -40,8 +34,6 @@ async def verify_request_signature(request: Request, secret_key: str):
 def send_signed_request(url, data, secret_key):
     body = json.dumps(data, separators=(",", ":")).encode()
     signature = hmac.new(secret_key.encode(), body, hashlib.sha256).hexdigest()
-    print(f"Client Body Hex: {body.hex()}")
-    print(f"Client Signature: {signature}")
     headers = {
         "Content-Type": "application/json",
         "X-Signature": signature,

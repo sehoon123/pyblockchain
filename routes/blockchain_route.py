@@ -16,6 +16,7 @@ from models.blockchain_util import (
     BlockModel,
     BlockchainModel,
     MineBlockResponse,
+    NFTWithOwnerModel,
 )
 from utils.security import verify_request_signature, send_signed_request  # Added
 
@@ -354,12 +355,13 @@ def get_previous_block():
     return block_model
 
 
-@router.get("/nfts", response_model=List[NFTModel])
+@router.get("/nfts", response_model=List[NFTWithOwnerModel])
 def get_all_nfts():
     """
     Retrieve all unique NFTs in the blockchain.
     """
     unique_nfts = {}
+    nfts_with_owners = []
     for block in blockchain.chain:
         for tx in block["transactions"]:
             nft_data = tx.get("nft")
@@ -368,7 +370,12 @@ def get_all_nfts():
                 nft_key = nft_data.get("dna")
                 if nft_key and nft_key not in unique_nfts:
                     unique_nfts[nft_key] = NFTModel(**nft_data)
-    return list(unique_nfts.values())
+
+    for dna, nft in unique_nfts.items():
+        owner = get_current_owner(dna)
+        nfts_with_owners.append(NFTWithOwnerModel(nft=nft, owner=owner))
+
+    return nfts_with_owners
 
 
 @router.get("/nft/{dna}", response_model=NFTDetailModel)

@@ -57,6 +57,8 @@
    echo 'AWS_ACCESS_KEY_ID="your-access-key"' >> .env
    echo 'AWS_SECRET_ACCESS_KEY="your-secret-key"' >> .env
    echo 'S3_BUCKET_NAME="your-s3-bucket-name"' >> .env
+   echo 'SECRET_KEY="your-very-secret-key"' >> .env
+
 
    ```
 
@@ -153,8 +155,36 @@ Bootstrap 노드를 설정했을 경우 자동으로 등록됩니다.
 ### 3. 트랜잭션 생성
 
 트랜잭션을 생성하고 네트워크의 모든 노드로 브로드캐스트합니다.
+
 초기에 주인이 없는 NFT는 sender 필드에 "SYSTEM"을 사용합니다.
+
 이후 NFT를 소유한 주인은 sender 필드에 자신의 이름을 사용합니다.
+
+HMAC을 사용하여 트랜잭션을 생성하고 서명합니다. (제외하기위해서는 dependencies=[Depends(verify_signature_dependency)] 파라미터를 제거하세요.)
+
+```bash
+HMAC이 사용되는동안에는 POST 요청은 signature 필드가 필요합니다.
+
+```javascript
+// Secret Key 설정 (서버와 동일한 값으로 설정)
+const secretKey = "your-very-secret-key"; // 실제 비밀 키로 교체하세요
+
+// Request Body를 문자열로 변환 (이미 문자열이므로 JSON.stringify 제거)
+const requestBody = pm.request.body.raw;
+
+// HMAC SHA256 서명 생성
+const CryptoJS = require('crypto-js'); // CryptoJS 라이브러리 사용
+const signature = CryptoJS.HmacSHA256(requestBody, secretKey).toString(CryptoJS.enc.Hex);
+
+// X-Signature 헤더 추가
+pm.request.headers.add({
+    key: "X-Signature",
+    value: signature
+});
+```
+
+위와 같은 방법으로 signature를 생성하여 서버로 전달해야합니다.
+
 
 ```bash
 curl -X 'POST' \
@@ -187,6 +217,8 @@ curl -X 'POST' \
 ### 4. 블록 채굴
 
 노드에서 블록을 채굴하고 네트워크의 다른 노드로 브로드캐스트합니다.
+
+HMAC을 사용하는 경우에는 signature 필드가 필요합니다.
 
 ```bash
 curl -X 'POST' \
@@ -241,6 +273,8 @@ curl -X GET "http://localhost:8000/api/replace_chain"
 
 3. **트랜잭션 생성 및 브로드캐스트**
 
+   HMAC을 사용하는 경우에는 signature 필드가 필요합니다. 
+
    ```bash
    curl -X 'POST' \
    'http://localhost:8001/api/broadcast_transaction' \
@@ -276,8 +310,10 @@ curl -X GET "http://localhost:8000/api/replace_chain"
    ```
 
 5. **블록 채굴 및 브로드캐스트**
+
    localhost:8001이 채굴을 시작하고 성공하면 블록을 브로드캐스트합니다.
 
+   HMAC을 사용하는 경우에는 signature 필드가 필요합니다. 
    ```bash
    curl -X 'POST' \ 'http://localhost:8001/api/mine_block' \
    -H 'accept: application/json' \
