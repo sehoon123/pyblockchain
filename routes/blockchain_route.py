@@ -1,12 +1,13 @@
 # blockchain_route.py
 import os
+from functools import lru_cache
 from typing import List, Optional
 import requests
 import boto3
 from botocore.exceptions import NoCredentialsError
 from database.connection import get_session
 from fastapi import APIRouter, HTTPException, Query, Request, Depends, status
-from sqlmodel import text
+from sqlmodel import text, Session, select
 from dotenv import load_dotenv
 from models.blockchain import Blockchain, Transaction, NFT
 from models.blockchain_util import (
@@ -60,17 +61,10 @@ ALLOWED_IMAGE_TYPES = {
     "image/webp",
 }
 
-
-# Dependencies
-async def verify_signature_dependency(request: Request):
-    from main import SECRET_KEY  # Import the secret key
-
-    await verify_request_signature(request, SECRET_KEY)
-
-
 router = APIRouter()
 
 
+@lru_cache(maxsize=128)
 @router.get("/databases", status_code=status.HTTP_201_CREATED)
 async def show_databases(session=Depends(get_session)) -> dict:
     try:
@@ -204,13 +198,14 @@ def broadcast_transaction(transaction: TransactionModel):
 
     # Broadcast the transaction to other nodes
     broadcast_errors = []
-    from main import SECRET_KEY  # SECRET_KEY 가져오기
 
     for node in blockchain.nodes:
         try:
-            # 서명된 요청 보내기
-            response = send_signed_request(
-                f"{node}/api/create_transaction", transaction.dict(), SECRET_KEY
+            # 일반적인 POST 요청 보내기
+            response = requests.post(
+                f"{node}/api/create_transaction",
+                json=transaction.dict(),
+                timeout=5,  # 타임아웃 설정 (선택 사항)
             )
             if response.status_code != 200:
                 broadcast_errors.append(
@@ -261,15 +256,13 @@ def mine_block(request: MineBlockRequestModel):
             previous_hash=block["previous_hash"],
         )
         # Broadcast the new block to other nodes
-        from main import SECRET_KEY  # Import the secret key
-
         for node in blockchain.nodes:
             print(f"Broadcasting block to node: {node}")
             try:
-                response = send_signed_request(
+                response = requests.post(
                     f"{node}/api/receive_block",
-                    block_model.dict(),
-                    SECRET_KEY,
+                    json=block_model.dict(),
+                    timeout=5,  # 타임아웃 설정 (선택 사항)
                 )
                 if response.status_code != 200:
                     print(f"Failed to broadcast block to {node}: {response.text}")
@@ -363,15 +356,16 @@ def get_previous_block():
     return block_model
 
 
-@router.get("/nfts", response_model=List[NFTWithOwnerAndPriceModel])
-def get_all_nfts():
+@router.get("/nfts", response_model=List[dict])
+def get_all_nfts_with_posts(session=Depends(get_session)):
     """
-    Retrieve all unique NFTs in the blockchain along with their current owners and prices.
+    Retrieve all unique NFTs in the blockchain along with their current owners, prices,
+    and associated post data from the database.
     """
     unique_nfts = {}
     nfts_with_details = []
 
-    # First, collect all unique NFTs by their DNA
+    # Step 1: Collect all unique NFTs by their DNA
     for block in blockchain.chain:
         for tx in block["transactions"]:
             nft_data = tx.get("nft")
@@ -380,12 +374,34 @@ def get_all_nfts():
                 if dna and dna not in unique_nfts:
                     unique_nfts[dna] = NFTModel(**nft_data)
 
-    # Now, for each unique NFT, find the current owner and current price
+    # Step 2: Query all matching posts in a single database query
+    nft_dnas = list(unique_nfts.keys())
+    if not nft_dnas:
+        # No NFTs to process, return an empty list
+        return []
+
+    try:
+        # Use a dynamic query to handle the `IN` clause
+        placeholders = ", ".join([f":dna_{i}" for i in range(len(nft_dnas))])
+        query = f"SELECT * FROM post WHERE dna IN ({placeholders})"
+
+        # Build parameter dictionary
+        parameters = {f"dna_{i}": nft_dnas[i] for i in range(len(nft_dnas))}
+
+        # Execute the query
+        result = session.execute(text(query), parameters)
+        posts = {
+            row.dna: dict(row._mapping) for row in result.fetchall()
+        }  # Map posts by DNA
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+    # Step 3: Add owner, price, and post information
     for dna, nft in unique_nfts.items():
         owner = get_current_owner(dna)
         current_price = None
 
-        # Iterate over the blockchain in reverse to find the latest transaction with a price
+        # Find the latest transaction with a price
         for block in reversed(blockchain.chain):
             for tx in reversed(block["transactions"]):
                 if tx.get("nft") and tx["nft"].get("dna") == dna:
@@ -395,8 +411,17 @@ def get_all_nfts():
             if current_price is not None:
                 break
 
+        # Fetch the corresponding post (if exists)
+        post = posts.get(dna)
+
+        # Append the NFT details along with the post information
         nfts_with_details.append(
-            NFTWithOwnerAndPriceModel(nft=nft, owner=owner, price=current_price)
+            {
+                "nft": nft.dict(),
+                "owner": owner,
+                "price": current_price,
+                "post": post,  # Include the post data (or None if no match found)
+            }
         )
 
     return nfts_with_details
@@ -568,17 +593,19 @@ def register_node(node: NodeRegisterModel):
     }
 
     # Broadcast the new node to all existing nodes except itself
-    from main import SECRET_KEY  # Import the
-
     for existing_node in blockchain.nodes:
         if existing_node != node_address and existing_node != current_node:
             try:
                 print(f"Broadcasting new node to {existing_node}")
-                send_signed_request(
+                response_broadcast = requests.post(
                     f"{existing_node}/api/register_node",
-                    {"node_address": node_address},
-                    SECRET_KEY,
+                    json={"node_address": node_address},
+                    timeout=5,  # 타임아웃 설정 (선택 사항)
                 )
+                if response_broadcast.status_code != 200:
+                    print(
+                        f"Failed to broadcast to {existing_node}: {response_broadcast.text}"
+                    )
             except requests.exceptions.RequestException as e:
                 print(f"Failed to broadcast to {existing_node}: {e}")
 
@@ -627,15 +654,15 @@ def broadcast_block(block: BlockModel):
     if not added:
         raise HTTPException(status_code=400, detail="Invalid block")
     # Send the block to other nodes
-    from main import SECRET_KEY  # Import the secret key
-
     for node in blockchain.nodes:
         try:
-            response = send_signed_request(
+            response = requests.post(
                 f"{node}/api/receive_block",
-                block.dict(),
-                SECRET_KEY,
+                json=block.dict(),
+                timeout=5,  # 타임아웃 설정 (선택 사항)
             )
+            if response.status_code != 200:
+                print(f"Failed to broadcast block to {node}: {response.text}")
         except requests.exceptions.RequestException:
             continue
     return {"message": "Block broadcasted successfully."}

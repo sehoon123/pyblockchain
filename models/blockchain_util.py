@@ -60,7 +60,25 @@ class NodeRegisterModel(BaseModel):
     node_address: str
 
 
+class PostModel(BaseModel):
+    id: int
+    user_id: int
+    item_name: Optional[str] = None
+    expected_price: Optional[float] = None
+    created_date: Optional[str] = None
+    updated_date: Optional[str] = None
+    dna: Optional[str] = None
+    img_url: Optional[str] = None
+    is_sold: Optional[bool] = None
+    description: Optional[str] = None
+    sold_price: Optional[float] = None
+
+    class Config:
+        orm_mode = True  # Allows compatibility with SQLAlchemy models
+
+
 class NFTWithOwnerAndPriceModel(BaseModel):
     nft: NFTModel
     owner: Optional[str] = None
     price: Optional[float] = None
+    post: Optional[PostModel] = None
