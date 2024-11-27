@@ -20,7 +20,6 @@ from models.blockchain_util import (
     MineBlockResponse,
     NFTWithOwnerAndPriceModel,
 )
-from utils.security import verify_request_signature, send_signed_request  # Added
 
 # Load environment variables
 load_dotenv()
@@ -143,7 +142,6 @@ def get_current_owner(dna: str) -> Optional[str]:
 @router.post(
     "/create_transaction",
     response_model=TransactionModel,
-    dependencies=[Depends(verify_signature_dependency)],
 )
 def create_transaction(transaction: TransactionModel):
     """
@@ -193,7 +191,6 @@ def create_transaction(transaction: TransactionModel):
 
 @router.post(
     "/broadcast_transaction",
-    dependencies=[Depends(verify_signature_dependency)],
 )
 def broadcast_transaction(transaction: TransactionModel):
     """
@@ -234,7 +231,6 @@ def broadcast_transaction(transaction: TransactionModel):
 @router.post(
     "/mine_block",
     response_model=MineBlockResponse,
-    dependencies=[Depends(verify_signature_dependency)],
 )
 def mine_block(request: MineBlockRequestModel):
     """
@@ -539,7 +535,6 @@ def get_block(
 # Node registration endpoint
 @router.post(
     "/register_node",
-    dependencies=[Depends(verify_signature_dependency)],
 )
 def register_node(node: NodeRegisterModel):
     """
@@ -622,7 +617,6 @@ def replace_chain():
 # Block broadcast endpoint
 @router.post(
     "/broadcast_block",
-    dependencies=[Depends(verify_signature_dependency)],
 )
 def broadcast_block(block: BlockModel):
     """
@@ -650,7 +644,6 @@ def broadcast_block(block: BlockModel):
 # Block reception endpoint
 @router.post(
     "/receive_block",
-    dependencies=[Depends(verify_signature_dependency)],
 )
 def receive_block(block: BlockModel):
     """

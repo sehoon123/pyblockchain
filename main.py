@@ -3,11 +3,12 @@ import fastapi
 from fastapi.middleware.cors import CORSMiddleware
 from routes.blockchain_route import router as blockchain_router
 import asyncio
+import aiohttp
 import os
 import requests
 import httpx
+
 from dotenv import load_dotenv  # Added
-from utils.security import send_signed_request_async  # Added
 
 load_dotenv()  # Added
 
@@ -71,13 +72,19 @@ async def periodic_mine_block():
     while True:
         try:
             data = {"miner_address": "main server"}
-            response = await send_signed_request_async(
-                "http://localhost:8000/api/mine_block", data, SECRET_KEY
-            )
-            if response.status_code == 200:
-                print("자동 블록 채굴 성공:", response.json())
-            else:
-                print(f"자동 블록 채굴 실패: {response.status_code}, {response.text}")
+
+            # 일반 HTTP POST 요청
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    "http://localhost:8000/api/mine_block", json=data
+                ) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        print("자동 블록 채굴 성공:", result)
+                    else:
+                        print(
+                            f"자동 블록 채굴 실패: {response.status}, {await response.text()}"
+                        )
         except Exception as e:
             print(f"자동 블록 채굴 중 오류 발생: {e}")
 
