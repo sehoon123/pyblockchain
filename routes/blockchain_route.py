@@ -4,7 +4,9 @@ from typing import List, Optional
 import requests
 import boto3
 from botocore.exceptions import NoCredentialsError
-from fastapi import APIRouter, HTTPException, Query, Request, Depends
+from database.connection import get_session
+from fastapi import APIRouter, HTTPException, Query, Request, Depends, status
+from sqlmodel import text
 from dotenv import load_dotenv
 from models.blockchain import Blockchain, Transaction, NFT
 from models.blockchain_util import (
@@ -16,7 +18,7 @@ from models.blockchain_util import (
     BlockModel,
     BlockchainModel,
     MineBlockResponse,
-    NFTWithOwnerModel,
+    NFTWithOwnerAndPriceModel,
 )
 from utils.security import verify_request_signature, send_signed_request  # Added
 
@@ -68,6 +70,16 @@ async def verify_signature_dependency(request: Request):
 
 
 router = APIRouter()
+
+
+@router.get("/databases", status_code=status.HTTP_201_CREATED)
+async def show_databases(session=Depends(get_session)) -> dict:
+    try:
+        result = session.execute(text("SHOW DATABASES"))
+        databases = [row[0] for row in result.fetchall()]
+        return {"databases": databases}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/generate_presigned_url")
@@ -355,27 +367,43 @@ def get_previous_block():
     return block_model
 
 
-@router.get("/nfts", response_model=List[NFTWithOwnerModel])
+@router.get("/nfts", response_model=List[NFTWithOwnerAndPriceModel])
 def get_all_nfts():
     """
-    Retrieve all unique NFTs in the blockchain.
+    Retrieve all unique NFTs in the blockchain along with their current owners and prices.
     """
     unique_nfts = {}
-    nfts_with_owners = []
+    nfts_with_details = []
+
+    # First, collect all unique NFTs by their DNA
     for block in blockchain.chain:
         for tx in block["transactions"]:
             nft_data = tx.get("nft")
             if nft_data:
-                # Use a unique identifier like 'dna' to filter duplicates
-                nft_key = nft_data.get("dna")
-                if nft_key and nft_key not in unique_nfts:
-                    unique_nfts[nft_key] = NFTModel(**nft_data)
+                dna = nft_data.get("dna")
+                if dna and dna not in unique_nfts:
+                    unique_nfts[dna] = NFTModel(**nft_data)
 
+    # Now, for each unique NFT, find the current owner and current price
     for dna, nft in unique_nfts.items():
         owner = get_current_owner(dna)
-        nfts_with_owners.append(NFTWithOwnerModel(nft=nft, owner=owner))
+        current_price = None
 
-    return nfts_with_owners
+        # Iterate over the blockchain in reverse to find the latest transaction with a price
+        for block in reversed(blockchain.chain):
+            for tx in reversed(block["transactions"]):
+                if tx.get("nft") and tx["nft"].get("dna") == dna:
+                    if tx.get("price") is not None:
+                        current_price = tx["price"]
+                        break
+            if current_price is not None:
+                break
+
+        nfts_with_details.append(
+            NFTWithOwnerAndPriceModel(nft=nft, owner=owner, price=current_price)
+        )
+
+    return nfts_with_details
 
 
 @router.get("/nft/{dna}", response_model=NFTDetailModel)

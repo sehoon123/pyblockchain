@@ -59,7 +59,8 @@ class NFTDetailModel(BaseModel):
 class NodeRegisterModel(BaseModel):
     node_address: str
 
-class NFTWithOwnerModel(BaseModel):
+
+class NFTWithOwnerAndPriceModel(BaseModel):
     nft: NFTModel
     owner: Optional[str] = None
-
+    price: Optional[float] = None
