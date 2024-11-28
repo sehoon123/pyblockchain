@@ -1,11 +1,11 @@
-# blockchain_route.py
+# routes/blockchain_route.py
 import os
 from functools import lru_cache
 from typing import List, Optional
 import requests
 import boto3
 from botocore.exceptions import NoCredentialsError
-from database.connection import get_session
+from database.connection import get_db
 from fastapi import APIRouter, HTTPException, Query, Request, Depends, status
 from sqlmodel import text, Session, select
 from dotenv import load_dotenv
@@ -32,7 +32,7 @@ blockchain = Blockchain()
 AWS_REGION = os.getenv("AWS_REGION")
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
-S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
+NFT_S3_BUCKET_NAME = os.getenv("NFT_S3_BUCKET_NAME")
 
 s3_client = boto3.client(
     "s3",
@@ -66,7 +66,7 @@ router = APIRouter()
 
 @lru_cache(maxsize=128)
 @router.get("/databases", status_code=status.HTTP_201_CREATED)
-async def show_databases(session=Depends(get_session)) -> dict:
+async def show_databases(session=Depends(get_db)) -> dict:
     try:
         result = session.execute(text("SHOW DATABASES"))
         databases = [row[0] for row in result.fetchall()]
@@ -99,7 +99,7 @@ def generate_presigned_url(
         presigned_url = s3_client.generate_presigned_url(
             ClientMethod="put_object",
             Params={
-                "Bucket": S3_BUCKET_NAME,
+                "Bucket": NFT_S3_BUCKET_NAME,
                 "Key": file_key,
                 "ContentType": content_type,  # Set Content-Type
                 "Metadata": {
@@ -357,7 +357,7 @@ def get_previous_block():
 
 
 @router.get("/nfts", response_model=List[dict])
-def get_all_nfts_with_posts(session=Depends(get_session)):
+def get_all_nfts_with_posts(session=Depends(get_db)):
     """
     Retrieve all unique NFTs in the blockchain along with their current owners, prices,
     and associated post data from the database.

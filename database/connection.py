@@ -1,3 +1,4 @@
+# database/connection.py
 import os
 from sqlmodel import create_engine, SQLModel, Session
 from dotenv import load_dotenv
@@ -22,18 +23,11 @@ DATABASE_URL = (
 
 # 엔진 생성
 try:
-    engine = create_engine(DATABASE_URL, echo=True)
+    engine = create_engine(DATABASE_URL, echo=False)
 except Exception as e:
     raise e
 
 
-def conn():
-    try:
-        SQLModel.metadata.create_all(engine)
-    except Exception as e:
-        raise e
-
-
-def get_session():
+def get_db():
     with Session(engine) as session:
         yield session

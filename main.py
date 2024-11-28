@@ -2,17 +2,22 @@
 import fastapi
 from fastapi.middleware.cors import CORSMiddleware
 from routes.blockchain_route import router as blockchain_router
+from sqlmodel import SQLModel
+from routes.users import user_router
+from routes.admin import admin_router
+from routes.mypage import mypage_router
+from contextlib import asynccontextmanager
 import asyncio
 import aiohttp
 import os
 import requests
-import httpx
-
+from database.connection import get_db, engine
 from dotenv import load_dotenv  # Added
 
 load_dotenv()  # Added
 
 SECRET_KEY = os.getenv("SECRET_KEY")  # Added
+
 
 app = fastapi.FastAPI(title="NFT Blockchain API", version="0.2.1")
 
@@ -21,34 +26,17 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
 
-@app.middleware("http")
-async def cache_request_body(request: fastapi.Request, call_next):
-    # Read the body and cache it in request.state.body
-    request.state.body = await request.body()
-
-    # Reset the body stream so that it can be read again
-    async def receive():
-        return {"type": "http.request", "body": request.state.body}
-
-    request._receive = receive
-    response = await call_next(request)
-    return response
-
 
 # Include the blockchain router
 app.include_router(blockchain_router, prefix="/api", tags=["Blockchain"])
-
-
-# Optionally, you can add a root endpoint
-@app.get("/")
-def read_root():
-    return {"message": "Welcome to the NFT Blockchain API"}
-
+app.include_router(user_router, prefix="/user")
+app.include_router(admin_router, prefix="/admin")
+app.include_router(mypage_router, prefix="/mypage")
 
 # Background task for periodic chain replacement
 async def periodic_replace_chain():
@@ -93,6 +81,7 @@ async def periodic_mine_block():
 
 @app.on_event("startup")
 async def startup_event():
+    SQLModel.metadata.create_all(bind=engine)
     asyncio.create_task(periodic_replace_chain())
     asyncio.create_task(periodic_mine_block())
 

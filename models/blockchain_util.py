@@ -1,4 +1,4 @@
-# models.py
+# models/blockchain_util.py
 from typing import List, Optional
 from pydantic import BaseModel, Field
 import datetime as _dt
