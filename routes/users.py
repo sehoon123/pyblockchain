@@ -62,11 +62,15 @@ def signup(user: UserCreateValidator, db: Session = Depends(get_db)):
         # 비밀번호 해싱
         hashed_password = bcrypt.hash(user.password)
 
+        profile_img = user.profile_img
+        if user.profile_img == "string":
+            profile_img = "https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png"
+
         new_user = User(
             email=user.email,
             password=hashed_password,
             nickname=user.nickname,
-            profile_img=user.profile_img,
+            profile_img=profile_img,
         )
         db.add(new_user)
 

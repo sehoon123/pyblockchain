@@ -178,6 +178,24 @@ def create_transaction(transaction: TransactionModel):
         index = blockchain.create_transaction(tx)
         # Save blockchain after creating transaction
         blockchain.save_to_file()
+
+        # Additional POST request to /post/create
+        if transaction.nft:
+            post_data = {
+                "user_id": transaction.receiver,
+                "item_name": transaction.nft.name,
+                "expected_price": transaction.price,
+                "dna": transaction.nft.dna,
+                "img_url": transaction.nft.image,
+                "description": transaction.nft.description,
+            }
+            response = requests.post("http://localhost:8000/posts/create", json=post_data, timeout=5)
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to notify /post/create: {response.text}",
+                )
+
         return transaction
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

@@ -51,3 +51,21 @@ def update_user(user_id: int, data: UserUpdate, session: Session = Depends(get_d
         status_code=status.HTTP_404_NOT_FOUND,
         detail="일치하는 유저가 존재하지 않습니다.",
     )
+
+@admin_router.delete("/userlist/{user_id}")
+def delete_user(user_id: int, session: Session = Depends(get_db)):
+    statement = select(User).where(User.id == user_id)
+    user = session.exec(statement).one_or_none()
+    
+    if user:
+        session.delete(user)
+        session.commit()
+        return {
+            "result": "success",
+            "message": "유저가 성공적으로 삭제되었습니다."
+        }
+        
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="일치하는 유저가 존재하지 않습니다."
+    )

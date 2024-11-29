@@ -2,7 +2,6 @@
 import os
 from sqlmodel import create_engine, SQLModel, Session
 from dotenv import load_dotenv
-from sshtunnel import SSHTunnelForwarder, create_logger
 
 # 환경 변수 로드
 load_dotenv()

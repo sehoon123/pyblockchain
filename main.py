@@ -6,6 +6,7 @@ from sqlmodel import SQLModel
 from routes.users import user_router
 from routes.admin import admin_router
 from routes.mypage import mypage_router
+from routes.post import post_router
 from contextlib import asynccontextmanager
 import asyncio
 import aiohttp
@@ -34,9 +35,10 @@ app.add_middleware(
 
 # Include the blockchain router
 app.include_router(blockchain_router, prefix="/api", tags=["Blockchain"])
-app.include_router(user_router, prefix="/user")
-app.include_router(admin_router, prefix="/admin")
-app.include_router(mypage_router, prefix="/mypage")
+app.include_router(user_router, prefix="/user", tags=["User"])
+app.include_router(admin_router, prefix="/admin", tags=["Admin"])
+app.include_router(mypage_router, prefix="/mypage", tags=["Mypage"])
+app.include_router(post_router, prefix="/posts", tags=["Post"])
 
 # Background task for periodic chain replacement
 async def periodic_replace_chain():
@@ -82,8 +84,8 @@ async def periodic_mine_block():
 @app.on_event("startup")
 async def startup_event():
     SQLModel.metadata.create_all(bind=engine)
-    asyncio.create_task(periodic_replace_chain())
-    asyncio.create_task(periodic_mine_block())
+    # asyncio.create_task(periodic_replace_chain())
+    # asyncio.create_task(periodic_mine_block())
 
     # Automatic node registration if not the bootstrap node
     host = os.getenv("HOST", "localhost")

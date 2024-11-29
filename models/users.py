@@ -54,6 +54,7 @@ class UserResponse(BaseModel):
     nickname: str
     profile_img: Optional[str]
     role: str
+    create_date : Optional[datetime] = Field(default=None, sa_column_kwargs={"onupdate": datetime.utcnow})
 
     class Config:
         from_attributes = True
